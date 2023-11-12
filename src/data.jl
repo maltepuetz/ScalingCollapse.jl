@@ -18,7 +18,11 @@ end
 
 
 # unzip data from arguments
-function unzip_data(xs::Vector{T1}, ys::Array{T2,2}, Ls::Vector{Int}) where {T1,T2<:Real}
+function unzip_data(
+    xs::Vector{T1},
+    ys::Array{T2,2},
+    Ls::Vector{T4}
+) where {T1,T2<:Real,T4<:Integer}
 
     # get ordering of ys and check for consistency
     correct_ordering = true
@@ -43,8 +47,8 @@ function unzip_data(
     xs::Vector{T1},
     ys::Vector{T2},
     es::Vector{T3},
-    Ls::Vector{Int}
-) where {T1,T2,T3<:Real}
+    Ls::Vector{T4}
+) where {T1,T2,T3<:Real,T4<:Integer}
 
     # get ordering of ys and check for consistency
     correct_ordering = true
@@ -66,7 +70,11 @@ function unzip_data(
     return data
 end
 
-function unzip_data(xs::Array{T1,2}, ys::Array{T2,2}, Ls::Vector{Int}) where {T1,T2<:Real}
+function unzip_data(
+    xs::Array{T1,2},
+    ys::Array{T2,2},
+    Ls::Vector{T4}
+) where {T1,T2<:Real,T4<:Integer}
 
     # get ordering of ys and check for consistency
     correct_ordering = true
@@ -91,8 +99,8 @@ function unzip_data(
     xs::Array{T1,2},
     ys::Array{T2,2},
     es::Array{T3,2},
-    Ls::Vector{Int}
-) where {T1,T2,T3<:Real}
+    Ls::Vector{T4}
+) where {T1,T2,T3<:Real,T4<:Integer}
 
     # get ordering of ys and check for consistency
     correct_ordering = true
@@ -117,8 +125,8 @@ end
 function unzip_data(
     xs::Vector{Vector{T1}},
     ys::Vector{Vector{T2}},
-    Ls::Vector{Int}
-) where {T1,T2<:Real}
+    Ls::Vector{T4}
+) where {T1,T2<:Real,T4<:Integer}
 
     # check for consistency
     @assert length(xs) == length(ys)
@@ -138,8 +146,8 @@ function unzip_data(
     xs::Vector{Vector{T1}},
     ys::Vector{Vector{T2}},
     es::Vector{Vector{T3}},
-    Ls::Vector{Int}
-) where {T1,T2,T3<:Real}
+    Ls::Vector{T4}
+) where {T1,T2,T3<:Real,T4<:Integer}
 
     # check for consistency
     @assert length(xs) == length(ys)
