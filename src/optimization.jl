@@ -84,21 +84,6 @@ function optimize_parameters(
 end
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 """
     squared_sum_residuals(data::Vector{Data}, scaling_function, parameters; kwargs...)
 
@@ -123,17 +108,17 @@ function squared_sum_residuals(data::Vector{Data}, scaling_function, parameters;
         end
     end
 
-    data_scaled = [scaling_function(data[i], parameters...) for i in eachindex(data)]
+    scaled_data = [scaling_function(data[i], parameters...) for i in eachindex(data)]
 
     # set interval in which we want to optimize
     dx = get(kwargs, :dx, [-Inf, Inf])
     interval = Vector{Float64}(undef, 2)
     interval[1] = max(
-        maximum(data_scaled[i].xs[1] for i in eachindex(data_scaled)),
+        maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
         dx[1]
     )
     interval[2] = min(
-        minimum(data_scaled[i].xs[end] for i in eachindex(data_scaled)),
+        minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
         dx[2]
     )
 
@@ -142,12 +127,12 @@ function squared_sum_residuals(data::Vector{Data}, scaling_function, parameters;
 
     # create spline for each system size
     splines = [
-        Spline1D(data_scaled[i].xs, data_scaled[i].ys, k=3) for i in eachindex(data_scaled)
+        Spline1D(scaled_data[i].xs, scaled_data[i].ys, k=3) for i in eachindex(scaled_data)
     ]
 
     N_steps = 100
     xvals = range(interval[1], interval[2], length=N_steps)
-    yvals = zeros(N_steps, length(data_scaled))
+    yvals = zeros(N_steps, length(scaled_data))
     for (l, spline) in enumerate(splines)
         for (i, x) in enumerate(xvals)
             yvals[i, l] = spline(x)

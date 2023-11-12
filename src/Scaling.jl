@@ -6,14 +6,19 @@ using Dierckx
 using Optim
 using Statistics
 
-include("Data.jl")
-include("ScalingFunction.jl")
+
+export Scaling
+
+include("data.jl")
+include("scalingfunction.jl")
 include("optimization.jl")
 include("error_analysis.jl")
-include("ScalingProblem.jl")
+include("scalingproblem.jl")
 
 #=
+# TODO add tests
 # TODO add functions to extract 'ready to plot' data from ScalingProblem
-# TODO add Measurements.jl support - and parameter export
+# TODO add Measurements.jl support - and parameter export (maybe)
+# TODO package extension for plotting (maybe)
 =#
 end
