@@ -157,3 +157,14 @@ function Base.show(io::IO, sp::ScalingProblem)
         println(io, "    The optimization started at the given starting points.")
     end
 end
+
+
+function scaled_data(sp::ScalingProblem)
+    scaled_data = [sp.sf.f(sp.data[i], sp.optimal_ps...) for i in eachindex(sp.data)]
+    xs = [scaled_data[i].xs for i in eachindex(scaled_data)]
+    ys = [scaled_data[i].ys for i in eachindex(scaled_data)]
+    es = [scaled_data[i].es for i in eachindex(scaled_data)]
+    Ls = [scaled_data[i].L for i in eachindex(scaled_data)]
+
+    return xs, ys, es, Ls
+end

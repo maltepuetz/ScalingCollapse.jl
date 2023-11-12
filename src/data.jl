@@ -114,7 +114,11 @@ function unzip_data(
     return data
 end
 
-function unzip_data(xs::Vector{Vector}, ys::Vector{Vector}, Ls::Vector{Int})
+function unzip_data(
+    xs::Vector{Vector{T1}},
+    ys::Vector{Vector{T2}},
+    Ls::Vector{Int}
+) where {T1,T2<:Real}
 
     # check for consistency
     @assert length(xs) == length(ys)
@@ -131,10 +135,11 @@ function unzip_data(xs::Vector{Vector}, ys::Vector{Vector}, Ls::Vector{Int})
 end
 
 function unzip_data(
-    xs::Vector{Vector},
-    ys::Vector{Vector},
-    es::Vector{Vector},
-    Ls::Vector{Int})
+    xs::Vector{Vector{T1}},
+    ys::Vector{Vector{T2}},
+    es::Vector{Vector{T3}},
+    Ls::Vector{Int}
+) where {T1,T2,T3<:Real}
 
     # check for consistency
     @assert length(xs) == length(ys)
