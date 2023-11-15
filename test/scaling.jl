@@ -44,6 +44,22 @@ close(file)
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.001)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.01)
+
+        sp = Scaling.ScalingProblem(Ts, binder, Ls;
+            sf=Scaling.ScalingFunction(:x; p_names=["T_c", "nu"]),
+            dx=[-1.0, 1.0],
+            starting_ps=[2.2, 1.0],
+            error = true
+        )
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.001)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.01)
+        
+        @test try
+            show(sp)
+            true
+        catch
+            false
+        end
     end
 
     @testset "Magnetization" begin
