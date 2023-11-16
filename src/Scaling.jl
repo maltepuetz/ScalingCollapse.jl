@@ -7,7 +7,7 @@ using Optim
 using Statistics
 
 
-export Scaling
+export ScalingProblem, ScalingFunction
 
 include("data.jl")
 include("scalingfunction.jl")
