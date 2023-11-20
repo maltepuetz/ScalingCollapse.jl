@@ -45,8 +45,8 @@ end
 
 function unzip_data(
     xs::Vector{T1},
-    ys::Vector{T2},
-    es::Vector{T3},
+    ys::Array{T2,2},
+    es::Array{T3,2},
     Ls::Vector{T4}
 ) where {T1,T2,T3<:Real,T4<:Integer}
 
