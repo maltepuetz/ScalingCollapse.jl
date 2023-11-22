@@ -2,16 +2,24 @@ function error_analysis(
     data::Vector{Data},
     sf::ScalingFunction,
     optimal_ps,
-    minimum;
+    minimum,
+    verbose;
     kwargs...
 )
+    verbose && @info "Starting error analysis..."
+
+    # check if algorithm is specified
+    algorithm = get(kwargs, :algorithm, :hybrid)
+    quality = quality_houdayer
+    algorithm == :spline && (quality = quality_spline)
+
 
     optimal_ps_error = zeros(size(optimal_ps))
     for i in eachindex(optimal_ps)
 
         # define the function to find roots of
         function f_root(x)
-            y = squared_sum_residuals(
+            y = quality(
                 data,
                 sf.f,
                 optimal_ps .+ x .* _one_vector(i, length(optimal_ps));
@@ -30,6 +38,7 @@ function error_analysis(
         # set error to be the largest of l and r error
         optimal_ps_error[i] = max(abs(delta_l), abs(delta_r))
     end
+    verbose && @info "Found errors."
     return optimal_ps_error
 end
 

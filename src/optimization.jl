@@ -8,12 +8,21 @@ function optimize_parameters(
     kwargs...
 )
 
+    # check if algorithm is specified
+    algorithm = get(kwargs, :algorithm, :hybrid)
+
     # check if starting parameters have been provided
     starting_ps = get(kwargs, :starting_ps, nothing)
     if starting_ps !== nothing
+
+        # set correct quality function
+        quality = quality_houdayer
+        algorithm == :spline && (quality = quality_spline)
+
         return optimize_parameters(
             data,
             sf,
+            quality,
             p_space,
             starting_ps,
             verbose;
@@ -21,16 +30,20 @@ function optimize_parameters(
         )
     end
 
+    # set correct quality function
+    quality = quality_spline
+    algorithm == :houdayer && (quality = quality_houdayer)
+
     # do a scan of the parameter space to find good starting points
     verbose && @info "Scanning parameter space..."
     p_combos = _parameter_combinations(p_space)
-    ssr_p_space = zeros(size(p_combos))
+    S_p_space = zeros(size(p_combos))
     for (i, ps) in enumerate(p_combos)
-        ssr_p_space[i] = squared_sum_residuals(
+        S_p_space[i] = quality(
             data, sf.f, ps; kwargs...
         )
     end
-    loc_starting_ps = local_minima(ssr_p_space, p_combos)
+    loc_starting_ps = local_minima(S_p_space, p_combos)
     verbose && @info "Found $(length(loc_starting_ps)) local minima."
     verbose && @info "Optimizing each starting point..."
 
@@ -39,12 +52,13 @@ function optimize_parameters(
     loc_optimal_ps = Vector{Vector{Float64}}(undef, length(loc_starting_ps))
     for (i, l_ps) in enumerate(loc_starting_ps)
         result = optimize(
-            ps -> squared_sum_residuals(
+            ps -> quality(
                 data, sf.f, ps;
                 check_bounds=true,
                 p_space=p_space,
                 kwargs...),
-            l_ps
+            l_ps,
+            NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
         )
         loc_minima[i] = result.minimum
         loc_optimal_ps[i] = result.minimizer
@@ -55,12 +69,31 @@ function optimize_parameters(
     minimum = loc_minima[indexmin]
     optimal_ps = loc_optimal_ps[indexmin]
 
+    if algorithm == :hybrid
+        # optimize from the global minimum of the quality_spline function
+        # using the quality_houdayer function
+
+        verbose && @info "Optimizing global minimum with Houdayer method..."
+        result = optimize(
+            ps -> quality_houdayer(
+                data, sf.f, ps;
+                check_bounds=true,
+                p_space=p_space,
+                kwargs...),
+            optimal_ps,
+            NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
+        )
+        minimum = result.minimum
+        optimal_ps = result.minimizer
+    end
+
     return optimal_ps, minimum
 end
 
 function optimize_parameters(
     data::Vector{Data},
     sf::ScalingFunction,
+    quality,
     p_space,
     starting_ps,
     verbose;
@@ -69,98 +102,21 @@ function optimize_parameters(
     verbose && @info "Starting optimzation of provided startign parameters..."
     # optimize starting parameters
     result = optimize(
-        ps -> squared_sum_residuals(
+        ps -> quality(
             data, sf.f, ps;
             check_bounds=true,
             p_space=p_space,
             kwargs...),
-        starting_ps
+        starting_ps,
+        NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
     )
 
     minimum = result.minimum
     optimal_ps = result.minimizer
 
+    verbose && @info "Found optimal parameters."
     return optimal_ps, minimum
 end
-
-
-"""
-    squared_sum_residuals(data::Vector{Data}, scaling_function, parameters; kwargs...)
-
-Calculate the squared sum of residuals for a given scaling function and parameters.
-
-# Arguments
-- `data::Vector{Data}`: data to be scaled
-- `scaling_function::Function`: scaling function
-- `parameters`: parameters for the scaling function
-"""
-function squared_sum_residuals(data::Vector{Data}, scaling_function, parameters; kwargs...)
-
-    # check if parameters are in bounds -- if not return Inf
-    if get(kwargs, :check_bounds, false)
-        p_space = get(
-            kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:3]
-        )
-        for (i, p) in enumerate(parameters)
-            if p < p_space[i][1] || p > p_space[i][end]
-                return Inf
-            end
-        end
-    end
-
-    scaled_data = [scaling_function(data[i], parameters...) for i in eachindex(data)]
-
-    # set interval in which we want to optimize
-    dx = get(kwargs, :dx, [-Inf, Inf])
-    interval = Vector{Float64}(undef, 2)
-    interval[1] = max(
-        maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
-        dx[1]
-    )
-    interval[2] = min(
-        minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
-        dx[2]
-    )
-
-    # check whether the constructed optimization interval is valid
-    interval[1] > interval[2] && return Inf
-
-    # create spline for each system size
-    splines = [
-        Spline1D(scaled_data[i].xs, scaled_data[i].ys, k=3) for i in eachindex(scaled_data)
-    ]
-
-    N_steps = 100
-    xvals = range(interval[1], interval[2], length=N_steps)
-    yvals = zeros(N_steps, length(scaled_data))
-    for (l, spline) in enumerate(splines)
-        for (i, x) in enumerate(xvals)
-            yvals[i, l] = spline(x)
-        end
-    end
-
-    # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
-    offset = minimum(yvals)
-    for i in eachindex(yvals)
-        yvals[i] -= offset
-    end
-    norm_factor = maximum(yvals)
-    for i in eachindex(yvals)
-        yvals[i] /= norm_factor
-    end
-
-    # calculate squared sum of residuals
-    ssr = 0.0
-    for i in axes(yvals, 1)
-        ssr += var(yvals[i, :])
-    end
-    ssr /= N_steps
-
-    return ssr
-end
-
-
-
 
 
 

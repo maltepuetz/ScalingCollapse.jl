@@ -110,7 +110,9 @@ struct ScalingProblem
         # perform error analysis
         optimal_ps_error = zeros(size(optimal_ps))
         if error
-            optimal_ps_error = error_analysis(data, sf, optimal_ps, minimum; kwargs...)
+            optimal_ps_error = error_analysis(data, sf, optimal_ps, minimum, verbose;
+                kwargs...
+            )
         end
 
         new(data, sf, p_space, dx, optimal_ps, optimal_ps_error, minimum)
@@ -155,6 +157,7 @@ function Base.show(io::IO, sp::ScalingProblem)
     else
         println(io, "    There was no scan of the parameter space.")
         println(io, "    The optimization started at the given starting points.")
+        println(io, "    This is faster, but might not find the global minimum!")
     end
 end
 
