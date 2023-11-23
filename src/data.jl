@@ -1,7 +1,7 @@
 """
     Data(L::Int, xs::Vector{Float64}, ys::Vector{Float64}, es::Vector{Float64})
 
-A Data object stores the data for a single system size.
+A Data object stores the data for a single system size. Sorted by the x values.
 
 # Fields
 - `L::Int`: system size
@@ -14,6 +14,15 @@ struct Data
     xs::Vector{Float64}  # x values
     ys::Vector{Float64}  # y values
     es::Vector{Float64}  # y error values
+    function Data(L, xs, ys, es)
+
+        # sort data by x values
+        perm = sortperm(xs)
+        xs = xs[perm]
+        ys = ys[perm]
+        es = es[perm]
+        return new(L, xs, ys, es)
+    end
 end
 
 
