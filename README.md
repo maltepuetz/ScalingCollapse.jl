@@ -69,10 +69,5 @@ Now the algorithm will only optimize the critical temperature `T_c` and the crit
 To be written...
 
 
-## Disclaimer
-As of right now, the scaling is based on the absolute values of the input data. This means that any errors that you provide to the `ScalingProblem` will not affect the scaling parameters. 
-
-This is likely to be changed in the future, when I find the time to work on a better solution.
-
 ## Have fun and let me know if you have any problems!
 
