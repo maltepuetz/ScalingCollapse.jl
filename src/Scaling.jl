@@ -17,6 +17,7 @@ include("quality_spline.jl")
 include("optimization.jl")
 include("error_analysis.jl")
 include("scalingproblem.jl")
+include("residual_landscape.jl")
 
 #=
 # TODO add tests
