@@ -54,9 +54,6 @@ end
 
 function fit_mastercurve(scaled_data, i, j)
 
-    # set epsilons to avoid numerical instabilities
-    eps = 1e-6
-
     # set arrays to store set of data used for fitting
     xs = Float64[]
     ys = Float64[]
@@ -80,9 +77,9 @@ function fit_mastercurve(scaled_data, i, j)
     all(ws .== 0.0) && (ws .= 1.0)
     ws .= 1 ./ ws .^ 2
 
-    # check whether elements in ws are finite
+    # if there are single zero errors, set weigth to max(ws \ Inf)
     for i in eachindex(ws)
-        isinf(ws[i]) && (ws[i] = 1 / eps)
+        isinf(ws[i]) && (ws[i] = maximum(ws[isfinite.(ws)]))
     end
 
     K = sum(ws)
