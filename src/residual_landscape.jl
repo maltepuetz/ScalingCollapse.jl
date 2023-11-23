@@ -29,7 +29,7 @@ function residual_landscapes(sp::ScalingProblem; kwargs...)
         for (j, p) in enumerate(p_space[i])
             ps = copy(sp.optimal_ps)
             ps[i] = p
-            residuals[i][j] = quality(sp.data, sp.sf.f, ps; kwargs...)
+            residuals[i][j] = quality(sp.data, sp.sf.f, ps; dx=sp.dx, kwargs...)
         end
     end
 
