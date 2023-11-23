@@ -80,6 +80,10 @@ function fit_mastercurve(scaled_data, i, j)
     all(ws .== 0.0) && (ws .= 1.0)
     ws .= 1 ./ ws .^ 2
 
+    # check whether elements in ws are finite
+    for i in eachindex(ws)
+        isinf(ws[i]) && (ws[i] = 1 / eps)
+    end
 
     K = sum(ws)
     Kx = sum(ws .* xs)
