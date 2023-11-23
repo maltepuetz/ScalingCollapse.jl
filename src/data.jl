@@ -135,7 +135,7 @@ function unzip_data(
     # unzip data
     data = Vector{Data}(undef, length(Ls))
     for (l, L) in enumerate(Ls)
-        data[l] = Data(L, xs[l], ys[l], zeros(Float64, length(xs)))
+        data[l] = Data(L, xs[l], ys[l], zeros(Float64, length(xs[l])))
     end
 
     return data
