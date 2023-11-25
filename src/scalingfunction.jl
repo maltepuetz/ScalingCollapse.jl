@@ -123,12 +123,9 @@ struct ScalingFunction
         else
             error("Unknown preset: $preset")
         end
-
-
     end
 
     function ScalingFunction(f::Function; kwargs...)
-
         p_names = if haskey(kwargs, :p_names)
             kwargs[:p_names]
         else
@@ -138,10 +135,8 @@ struct ScalingFunction
                 error("Please specify either :p_names or :N_parameters")
             end
         end
-
         x_scale = get(kwargs, :x_scale, "tmp")
         y_scale = get(kwargs, :y_scale, "tmp")
-
         return new(f, p_names, x_scale, y_scale, zeros(3)) # TODO fixed_ps
     end
 

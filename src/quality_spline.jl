@@ -1,29 +1,25 @@
-function quality_spline(data::Vector{Data}, scaling_function, parameters; kwargs...)
+function quality_spline(sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    if get(kwargs, :check_bounds, false)
-        p_space = get(
-            kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:3]
-        )
+    if check_bounds
         for (i, p) in enumerate(parameters)
-            if p < p_space[i][1] || p > p_space[i][end]
+            if p < sp.p_space[i][1] || p > sp.p_space[i][end]
                 return Inf
             end
         end
     end
 
-    scaled_data = [scaling_function(data[i], parameters...) for i in eachindex(data)]
+    scaled_data = [sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
 
     # set interval in which we want to optimize
-    dx = get(kwargs, :dx, [-Inf, Inf])
     interval = Vector{Float64}(undef, 2)
     interval[1] = max(
         maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
-        dx[1]
+        sp.dx[1]
     )
     interval[2] = min(
         minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
-        dx[2]
+        sp.dx[2]
     )
 
     # check whether the constructed optimization interval is valid

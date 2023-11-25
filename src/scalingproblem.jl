@@ -71,7 +71,7 @@ ScalingProblem(xs, ys, Ls;
 ```
 
 """
-struct ScalingProblem
+mutable struct ScalingProblem
 
     # data to be scaled
     data::Vector{Data}
@@ -86,17 +86,85 @@ struct ScalingProblem
     optimal_ps_error::Vector{Float64}
     minimum::Float64
 
+    # other options
+    solved::Bool
+    verbose::Bool
+    error::Bool
+    quality_scan::Function
+    quality::Function
+    skip_scan::Bool
+    starting_ps::Vector{Float64}
+
+
+
+    function ScalingProblem(
+        data::Vector{Data},
+        sf,
+        p_space,
+        dx,
+        optimal_ps,
+        optimal_ps_error,
+        minimum,
+        solved,
+        verbose,
+        error,
+        quality_scan,
+        quality,
+        skip_scan,
+        starting_ps,
+    )
+        return new(
+            data,
+            sf,
+            p_space,
+            dx,
+            optimal_ps,
+            optimal_ps_error,
+            minimum,
+            solved,
+            verbose,
+            error,
+            quality_scan,
+            quality,
+            skip_scan,
+            starting_ps,
+        )
+    end
+
     function ScalingProblem(args...; kwargs...)
 
-        # unzip kwargs...
+        ##### unzip kwargs... #####
         sf = get(kwargs, :sf, ScalingFunction(; kwargs...))
         p_space = get(kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:n_parameters(sf)])
         dx = get(kwargs, :dx, [-Inf, Inf])
         verbose = get(kwargs, :verbose, false)
         error = get(kwargs, :error, false)
+        skip_scan = false
+        starting_ps = get(kwargs, :starting_ps, zeros(n_parameters(sf)))
         if haskey(kwargs, :starting_ps)
             # if starting_ps are given, there will be no initial parameter space scan
             p_space = [-1_000_000:1_000_000 for _ in 1:n_parameters(sf)]
+            skip_scan = true
+        end
+        quality_scan = quality_spline
+        if haskey(kwargs, :quality_scan)
+            if kwargs[:quality_scan] == :houdayer
+                quality_scan = quality_houdayer
+            elseif kwargs[:quality_scan] == :spline
+                nothing
+            else
+                error("Please specify either :houdayer or :spline for :quality_scan")
+            end
+        end
+        quality = quality_houdayer
+        if haskey(kwargs, :quality)
+            if kwargs[:quality] == :houdayer
+                nothing
+            elseif kwargs[:quality] == :spline
+                quality = quality_spline
+            else
+                error("Please specify either :houdayer or :spline for :quality")
+            end
         end
 
         @assert length(p_space) == n_parameters(sf)
@@ -104,20 +172,45 @@ struct ScalingProblem
         # unzip args...
         data = unzip_data(args...)
 
-        # find global minimum
-        optimal_ps, minimum = optimize_parameters(data, sf, p_space, verbose; kwargs...)
+        # construct unsolved ScalingProblem
+        optimal_ps = zeros(n_parameters(sf))
+        optimal_ps_error = zeros(n_parameters(sf))
+        minimum = 0.0
+        solved = false
+        sp = ScalingProblem(
+            data,
+            sf,
+            p_space,
+            dx,
+            optimal_ps,
+            optimal_ps_error,
+            minimum,
+            solved,
+            verbose,
+            error,
+            quality_scan,
+            quality,
+            skip_scan,
+            starting_ps,
+        )
 
-        # perform error analysis
-        optimal_ps_error = zeros(size(optimal_ps))
-        if error
-            optimal_ps_error = error_analysis(data, sf, optimal_ps, minimum, verbose;
-                kwargs...
-            )
-        end
-
-        new(data, sf, p_space, dx, optimal_ps, optimal_ps_error, minimum)
+        # solve ScalingProblem
+        solve!(sp)
+        return sp
     end
+
 end
+
+
+function solve!(sp::ScalingProblem)
+
+    # find global minimum
+    optimize_parameters!(sp)  # data, sf, p_space, verbose; kwargs...
+
+    # perform error analysis
+    error_analysis!(sp)  # data, sf, optimal_ps, minimum, verbose; kwargs...
+end
+
 
 function Base.show(io::IO, sp::ScalingProblem)
     println(io, "ScalingProblem")
