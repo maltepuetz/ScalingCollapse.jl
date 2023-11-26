@@ -138,7 +138,7 @@ mutable struct ScalingProblem
         p_space = get(kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:n_parameters(sf)])
         dx = get(kwargs, :dx, [-Inf, Inf])
         verbose = get(kwargs, :verbose, false)
-        error = get(kwargs, :error, false)
+        error = get(kwargs, :error, true)
         skip_scan = false
         starting_ps = get(kwargs, :starting_ps, zeros(n_parameters(sf)))
         if haskey(kwargs, :starting_ps)
