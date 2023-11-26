@@ -90,10 +90,11 @@ mutable struct ScalingProblem
     solved::Bool
     verbose::Bool
     error::Bool
-    quality_scan::Function
-    quality::Function
+    quality_scan::QualityFunction
+    quality::QualityFunction
     skip_scan::Bool
     starting_ps::Vector{Float64}
+    errors_defined::Bool
 
 
 
@@ -112,6 +113,7 @@ mutable struct ScalingProblem
         quality,
         skip_scan,
         starting_ps,
+        errors_defined,
     )
         return new(
             data,
@@ -128,6 +130,7 @@ mutable struct ScalingProblem
             quality,
             skip_scan,
             starting_ps,
+            errors_defined,
         )
     end
 
@@ -146,31 +149,22 @@ mutable struct ScalingProblem
             p_space = [-1_000_000:1_000_000 for _ in 1:n_parameters(sf)]
             skip_scan = true
         end
-        quality_scan = quality_spline
-        if haskey(kwargs, :quality_scan)
-            if kwargs[:quality_scan] == :houdayer
-                quality_scan = quality_houdayer
-            elseif kwargs[:quality_scan] == :spline
-                nothing
-            else
-                error("Please specify either :houdayer or :spline for :quality_scan")
-            end
-        end
-        quality = quality_houdayer
-        if haskey(kwargs, :quality)
-            if kwargs[:quality] == :houdayer
-                nothing
-            elseif kwargs[:quality] == :spline
-                quality = quality_spline
-            else
-                error("Please specify either :houdayer or :spline for :quality")
-            end
-        end
+        quality_scan = get(kwargs, :quality_scan, Spline(scan_mode=true))
+        quality = get(kwargs, :quality, Spline())
 
         @assert length(p_space) == n_parameters(sf)
 
         # unzip args...
         data = unzip_data(args...)
+
+        # check if errors are defined
+        errors_defined = false
+        for d in data
+            if any(d.es .!= 0.0)
+                errors_defined = true
+                break
+            end
+        end
 
         # construct unsolved ScalingProblem
         optimal_ps = zeros(n_parameters(sf))
@@ -192,6 +186,7 @@ mutable struct ScalingProblem
             quality,
             skip_scan,
             starting_ps,
+            errors_defined,
         )
 
         # solve ScalingProblem

@@ -91,7 +91,5 @@ function fit_mastercurve(scaled_data, i, j)
     Y_ij = a + scaled_data[i].xs[j] * b
     dY2_ij = 1 / Delta * (Kxx - 2 * scaled_data[i].xs[j] * Kx + scaled_data[i].xs[j]^2 * K)
 
-    isnan(dY2_ij) && @error "dY2_ij is NaN!"
-
     return Y_ij, dY2_ij
 end
