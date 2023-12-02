@@ -7,5 +7,6 @@ using HDF5
     @testset "Code quality (Aqua.jl)" begin
         Aqua.test_all(Scaling; ambiguities=false,)
     end
+    include("data.jl")
     include("scaling.jl")
 end
