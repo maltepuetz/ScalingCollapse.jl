@@ -26,6 +26,11 @@ struct Data
 end
 
 
+# overload method to check equality of two Data objects
+function Base.isequal(d1::Data, d2::Data)
+    return d1.L == d2.L && d1.xs == d2.xs && d1.ys == d2.ys && d1.es == d2.es
+end
+
 # unzip data from arguments
 function unzip_data(
     xs::Vector{T1},
@@ -35,9 +40,9 @@ function unzip_data(
 
     # get ordering of ys and check for consistency
     correct_ordering = true
-    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    size(ys, 1) == length(Ls) && (correct_ordering = false)
     @assert correct_ordering ? length(xs) == size(ys, 1) : length(xs) == size(ys, 2)
-    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 2)
+    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
 
     # unzip data
     data = Vector{Data}(undef, length(Ls))
@@ -61,10 +66,9 @@ function unzip_data(
 
     # get ordering of ys and check for consistency
     correct_ordering = true
-    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    size(ys, 1) == length(Ls) && (correct_ordering = false)
     @assert correct_ordering ? length(xs) == size(ys, 1) : length(xs) == size(ys, 2)
-    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 2)
-    @assert size(ys) == size(es)
+    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
 
     # unzip data
     data = Vector{Data}(undef, length(Ls))
@@ -87,8 +91,7 @@ function unzip_data(
 
     # get ordering of ys and check for consistency
     correct_ordering = true
-    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
-    @assert size(xs) == size(ys)
+    size(ys, 1) == length(Ls) && (correct_ordering = false)
     @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
 
     # unzip data
@@ -97,7 +100,12 @@ function unzip_data(
         if correct_ordering
             data[l] = Data(L, xs[:, l], ys[:, l], zeros(Float64, size(xs, 1)))
         else
-            data[l] = Data(L, xs[l, :], ys[l, :], zeros(Float64, size(xs, 1)))
+            data[l] = Data(
+                L,
+                xs[l, :],
+                ys[l, :],
+                zeros(Float64, size(ys, correct_ordering ? 1 : 2))
+            )
         end
     end
 
@@ -148,7 +156,6 @@ function unzip_data(
     end
 
     return data
-
 end
 
 function unzip_data(
@@ -170,4 +177,100 @@ function unzip_data(
     end
 
     return data
+end
+
+# unzip Measurements data
+function unzip_data(
+    xs::Vector{T1},
+    ys::Array{Measurement{T2},2},
+    Ls::Vector{T4}
+) where {T1,T2<:Real,T4<:Integer}
+
+    # get ordering of ys and check for consistency
+    correct_ordering = true
+    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    @assert correct_ordering ? length(xs) == size(ys, 1) : length(xs) == size(ys, 2)
+    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 2)
+
+    # unzip data
+    data = Vector{Data}(undef, length(Ls))
+    for (l, L) in enumerate(Ls)
+        if correct_ordering
+            data[l] = Data(
+                L,
+                xs,
+                Measurements.value.(ys[:, l]),
+                Measurements.uncertainty.(ys[:, l])
+            )
+        else
+            data[l] = Data(
+                L,
+                xs,
+                Measurements.value.(ys[l, :]),
+                Measurements.uncertainty.(ys[l, :])
+            )
+        end
+    end
+
+    return data
+end
+
+function unzip_data(
+    xs::Array{T1,2},
+    ys::Array{Measurement{T2},2},
+    Ls::Vector{T4}
+) where {T1,T2<:Real,T4<:Integer}
+
+    # get ordering of ys and check for consistency
+    correct_ordering = true
+    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    @assert size(xs) == size(ys)
+    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
+
+    # unzip data
+    data = Vector{Data}(undef, length(Ls))
+    for (l, L) in enumerate(Ls)
+        if correct_ordering
+            data[l] = Data(
+                L,
+                xs[:, l],
+                Measurements.value.(ys[:, l]),
+                Measurements.uncertainty.(ys[:, l])
+            )
+        else
+            data[l] = Data(
+                L,
+                xs[l, :],
+                Measurements.value.(ys[l, :]),
+                Measurements.uncertainty.(ys[l, :])
+            )
+        end
+    end
+
+    return data
+end
+
+function unzip_data(
+    xs::Vector{Vector{T1}},
+    ys::Vector{Vector{Measurement{T2}}},
+    Ls::Vector{T4}
+) where {T1,T2<:Real,T4<:Integer}
+
+    # check for consistency
+    @assert length(xs) == length(ys)
+    @assert length(xs) == length(Ls)
+
+    # unzip data
+    data = Vector{Data}(undef, length(Ls))
+    for (l, L) in enumerate(Ls)
+        data[l] = Data(
+            L,
+            xs[l],
+            Measurements.value.(ys[l]),
+            Measurements.uncertainty.(ys[l])
+        )
+    end
+
+    return data
+
 end
