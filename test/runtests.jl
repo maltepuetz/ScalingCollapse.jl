@@ -8,5 +8,6 @@ using HDF5
         Aqua.test_all(Scaling; ambiguities=false,)
     end
     include("data.jl")
-    include("scaling.jl")
+    include("ising.jl")
+    include("cdw.jl")
 end
