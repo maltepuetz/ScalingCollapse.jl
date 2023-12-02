@@ -4,11 +4,6 @@ function residual_landscapes(sp::ScalingProblem; kwargs...)
         error("Either run error analysis or provide p_space to plot residual landscapes.")
     end
 
-    # set quality funtion
-    algorithm = get(kwargs, :algorithm, :hybrid)
-    quality = quality_houdayer
-    algorithm == :spline && (quality = quality_spline)
-
     # set parameter space
     N_steps = get(kwargs, :N_steps, 50)
     p_space = get(
@@ -29,7 +24,7 @@ function residual_landscapes(sp::ScalingProblem; kwargs...)
         for (j, p) in enumerate(p_space[i])
             ps = copy(sp.optimal_ps)
             ps[i] = p
-            residuals[i][j] = quality(sp.data, sp.sf.f, ps; dx=sp.dx, kwargs...)
+            residuals[i][j] = sp.quality(sp, ps)
         end
     end
 

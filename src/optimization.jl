@@ -1,62 +1,35 @@
+function optimize_parameters!(sp)
 
-
-function optimize_parameters(
-    data::Vector{Data},
-    sf::ScalingFunction,
-    p_space,
-    verbose;
-    kwargs...
-)
-
-    # check if algorithm is specified
-    algorithm = get(kwargs, :algorithm, :hybrid)
-
-    # check if starting parameters have been provided
-    starting_ps = get(kwargs, :starting_ps, nothing)
-    if starting_ps !== nothing
-
-        # set correct quality function
-        quality = quality_houdayer
-        algorithm == :spline && (quality = quality_spline)
-
-        return optimize_parameters(
-            data,
-            sf,
-            quality,
-            p_space,
-            starting_ps,
-            verbose;
-            kwargs...
-        )
+    # scan parameter space
+    if !sp.skip_scan
+        parameter_scan!(sp)
     end
 
-    # set correct quality function
-    quality = quality_spline
-    algorithm == :houdayer && (quality = quality_houdayer)
+    # optimize parameters
+    optimize_starting_ps!(sp)
 
-    # do a scan of the parameter space to find good starting points
-    verbose && @info "Scanning parameter space..."
-    p_combos = _parameter_combinations(p_space)
+    return nothing
+end
+
+
+function parameter_scan!(sp)
+
+    sp.verbose && @info "Scanning parameter space..."
+    p_combos = _parameter_combinations(sp.p_space)
     S_p_space = zeros(size(p_combos))
     for (i, ps) in enumerate(p_combos)
-        S_p_space[i] = quality(
-            data, sf.f, ps; kwargs...
-        )
+        S_p_space[i] = sp.quality_scan(sp, ps; check_bounds=false)
     end
     loc_starting_ps = local_minima(S_p_space, p_combos)
-    verbose && @info "Found $(length(loc_starting_ps)) local minima."
-    verbose && @info "Optimizing each starting point..."
+    sp.verbose && @info "Found $(length(loc_starting_ps)) local minima."
+    sp.verbose && @info "Optimizing each starting point..."
 
     # optimize each starting point
     loc_minima = zeros(length(loc_starting_ps))
     loc_optimal_ps = Vector{Vector{Float64}}(undef, length(loc_starting_ps))
     for (i, l_ps) in enumerate(loc_starting_ps)
         result = optimize(
-            ps -> quality(
-                data, sf.f, ps;
-                check_bounds=true,
-                p_space=p_space,
-                kwargs...),
+            ps -> sp.quality_scan(sp, ps; check_bounds=true),
             l_ps,
             NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
         )
@@ -66,56 +39,27 @@ function optimize_parameters(
 
     # find global minimum
     indexmin = argmin(loc_minima)
-    minimum = loc_minima[indexmin]
-    optimal_ps = loc_optimal_ps[indexmin]
+    sp.starting_ps = loc_optimal_ps[indexmin]
 
-    if algorithm == :hybrid
-        # optimize from the global minimum of the quality_spline function
-        # using the quality_houdayer function
-
-        verbose && @info "Optimizing global minimum with Houdayer method..."
-        result = optimize(
-            ps -> quality_houdayer(
-                data, sf.f, ps;
-                check_bounds=true,
-                p_space=p_space,
-                kwargs...),
-            optimal_ps,
-            NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
-        )
-        minimum = result.minimum
-        optimal_ps = result.minimizer
-    end
-
-    return optimal_ps, minimum
+    return nothing
 end
 
-function optimize_parameters(
-    data::Vector{Data},
-    sf::ScalingFunction,
-    quality,
-    p_space,
-    starting_ps,
-    verbose;
-    kwargs...
-)
-    verbose && @info "Starting optimzation of provided startign parameters..."
+function optimize_starting_ps!(sp)
+
+    sp.verbose && @info "Starting optimzation of provided startign parameters..."
+
     # optimize starting parameters
     result = optimize(
-        ps -> quality(
-            data, sf.f, ps;
-            check_bounds=true,
-            p_space=p_space,
-            kwargs...),
-        starting_ps,
+        ps -> sp.quality(sp, ps; check_bounds=true),
+        sp.starting_ps,
         NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
     )
 
-    minimum = result.minimum
-    optimal_ps = result.minimizer
+    sp.minimum = result.minimum
+    sp.optimal_ps = result.minimizer
 
-    verbose && @info "Found optimal parameters."
-    return optimal_ps, minimum
+    sp.verbose && @info "Found optimal parameters."
+    return nothing
 end
 
 

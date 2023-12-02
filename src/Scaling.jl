@@ -1,28 +1,21 @@
 module Scaling
 
-# Write your package code here.
-
 using Dierckx
+using Measurements
 using Optim
 using Statistics
 
-
-
-export ScalingProblem, ScalingFunction
+export ScalingProblem
+export ScalingFunction
+export Spline
+export Houdayer
 
 include("data.jl")
 include("scalingfunction.jl")
-include("quality_houdayer.jl")
-include("quality_spline.jl")
+include("quality.jl")
 include("optimization.jl")
 include("error_analysis.jl")
 include("scalingproblem.jl")
 include("residual_landscape.jl")
 
-#=
-# TODO add tests
-# TODO add functions to extract 'ready to plot' data from ScalingProblem
-# TODO add Measurements.jl support - and parameter export (maybe)
-# TODO package extension for plotting (maybe)
-=#
 end

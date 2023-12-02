@@ -1,45 +1,31 @@
-function error_analysis(
-    data::Vector{Data},
-    sf::ScalingFunction,
-    optimal_ps,
-    minimum,
-    verbose;
-    kwargs...
-)
-    verbose && @info "Starting error analysis..."
+function error_analysis!(sp)
 
-    # check if algorithm is specified
-    algorithm = get(kwargs, :algorithm, :hybrid)
-    quality = quality_houdayer
-    algorithm == :spline && (quality = quality_spline)
+    sp.verbose && @info "Starting error analysis..."
 
-
-    optimal_ps_error = zeros(size(optimal_ps))
-    for i in eachindex(optimal_ps)
+    for i in eachindex(sp.optimal_ps)
 
         # define the function to find roots of
         function f_root(x)
-            y = quality(
-                data,
-                sf.f,
-                optimal_ps .+ x .* _one_vector(i, length(optimal_ps));
-                kwargs...
-            ) / minimum - 2.0
+            y = sp.quality(
+                sp,
+                sp.optimal_ps .+ x .* _one_vector(i, length(sp.optimal_ps))
+            ) / sp.minimum - 2.0
             return y
         end
 
         # find starting intervals
-        l, r = _start_deltas(optimal_ps[i], f_root)
+        l, r = _start_deltas(sp.optimal_ps[i], f_root)
 
         # find roots
         delta_l = _root(l, f_root(l), 0.0, -1.0, f_root)
         delta_r = _root(0.0, -1.0, r, f_root(r), f_root)
 
         # set error to be the largest of l and r error
-        optimal_ps_error[i] = max(abs(delta_l), abs(delta_r))
+        sp.optimal_ps_error[i] = max(abs(delta_l), abs(delta_r))
     end
-    verbose && @info "Found errors."
-    return optimal_ps_error
+    sp.verbose && @info "Found errors."
+
+    return nothing
 end
 
 function _one_vector(i, L)

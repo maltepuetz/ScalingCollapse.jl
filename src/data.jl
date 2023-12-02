@@ -20,7 +20,7 @@ struct Data
         perm = sortperm(xs)
         xs = xs[perm]
         ys = ys[perm]
-        es = es[perm]
+        es = es[perm] .|> abs
         return new(L, xs, ys, es)
     end
 end
