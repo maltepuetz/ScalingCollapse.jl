@@ -11,14 +11,17 @@ Create a scaling problem which solves on initialization.
 For more information on the arguments, see methods(Scaling.unzip_data).
 
 # Keyword Arguments
-- `sf::ScalingFunction=ScalingFunction(; kwargs...)`: scaling function
-- `p_space::Vector{StepRangeLen}=[0.1:0.1:3.0 for _ in sf.p_names]`: search parameter space
+- `sf::ScalingFunction=ScalingFunction(preset; kwargs...)`: scaling function
+- `p_space::Vector{StepRangeLen}=[0.1:0.1:3.0 for _ in sf.p_names]`: parameter search space
 - `dx::Vector{Float64}=[-Inf, Inf]`: optimization interval
+- `quality::QualityFunction=Spline()`: quality function
+- `quality_scan::QualityFunction=Spline(scan_mode=true)`: quality function for the
+    parameter space scan (it is highly recommended to use the default function here)
 - `verbose::Bool=false`: print information during optimization
 - `starting_ps::Vector{Float64}`: If `starting_ps` are given, there will be no initial
     parameter space scan. Instead, the optimization will start at the given points. This is
     much faster, but might not find the global minimum.
-- `error::Bool=false`: If `error=true`, the error analysis will be performed to give
+- `error::Bool=true`: If `error=true`, the error analysis will be performed to give
     estimates of the uncertainties of the optimal parameters.
 
 # Fields
@@ -29,6 +32,14 @@ For more information on the arguments, see methods(Scaling.unzip_data).
 - `optimal_ps::Vector{Float64}`: optimal parameters
 - `optimal_ps_error::Vector{Float64}`: uncertainties of the optimal parameters
 - `minimum::Float64`: minimum of the objective function
+- `solved::Bool`: `true` if optimization was called
+- `verbose::Bool`: print information during optimization
+- `error::Bool`: perform error analysis
+- `quality_scan::QualityFunction`: quality function for the parameter space scan
+- `quality::QualityFunction`: quality function
+- `skip_scan::Bool`: `true` if `starting_ps` are given by the user
+- `starting_ps::Vector{Float64}`: starting points for the optimization
+- `errors_defined::Bool`: `true` if errors are given by the user
 
 # Examples
 ```julia
@@ -36,8 +47,8 @@ using Scaling
 ```
 
 ### rescale the x axis only
-    (e.g. for ys == binder cumulant of Ising model)
 ```julia
+# (e.g. for ys == binder cumulant of Ising model)
 ScalingProblem(xs, ys, Ls;
     sc=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
@@ -53,8 +64,8 @@ ScalingProblem(xs, ys, es, Ls;
 ```
 
 ### rescale the x and y axis
-    (e.g. for ys == magnetization of Ising model)
 ```julia
+# (e.g. for ys == magnetization of Ising model)
 ScalingProblem(xs, ys, Ls;
     sc=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]),
     dx=[-1.0, 1.0],
@@ -62,8 +73,8 @@ ScalingProblem(xs, ys, Ls;
 ```
 
 ### rescale the x and y axis, but y axis with negative exponent
-    (e.g. for ys == susceptibility of Ising model)
 ```julia
+# (e.g. for ys == susceptibility of Ising model)
 ScalingProblem(xs, ys, Ls;
     sc=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
     dx=[-1.0, 1.0],
@@ -200,10 +211,12 @@ end
 function solve!(sp::ScalingProblem)
 
     # find global minimum
-    optimize_parameters!(sp)  # data, sf, p_space, verbose; kwargs...
+    optimize_parameters!(sp)
 
     # perform error analysis
-    error_analysis!(sp)  # data, sf, optimal_ps, minimum, verbose; kwargs...
+    if sp.error
+        error_analysis!(sp)
+    end
 end
 
 
