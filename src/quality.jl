@@ -1,10 +1,3 @@
-"""
-    QualityFunction
-
-Abstract type for quality functions. Quality functions are used to quantify the quality of
-a scaling. The optimal parameters minimize the quality function. Currently there are two
-quality functions implemented: `Spline` and `Houdayer`.
-"""
 abstract type QualityFunction end
 
 function Base.show(io::IO, qf::QualityFunction)
@@ -12,7 +5,7 @@ function Base.show(io::IO, qf::QualityFunction)
 end
 
 """
-    Spline(; N_steps::Int=100, weigth_density::Bool=true)
+    Spline(; N_steps::Int=100, weight_density::Bool=true)
 
 Quality function that uses a spline interpolation to calculate the quality of a scaling.
 
@@ -21,15 +14,15 @@ TO BE DOCUMENTED
 
 # Keyword arguments
 - `N_steps::Int=100`: Number of points used in the interval to calculate the quality.
-- `weigth_density::Bool=true`: If `true`, the quality is weighted by the density of data
+- `weight_density::Bool=true`: If `true`, the quality is weighted by the density of data
   points in the interval.
 """
 struct Spline <: QualityFunction
     N_steps::Int
-    weigth_density::Bool
+    weight_density::Bool
     scan_mode::Bool
-    function Spline(; N_steps::Int=100, weigth_density=true, scan_mode=false)
-        new(N_steps, weigth_density, scan_mode)
+    function Spline(; N_steps::Int=100, weight_density=true, scan_mode=false)
+        new(N_steps, weight_density, scan_mode)
     end
 end
 
@@ -77,7 +70,7 @@ function (sqf::Spline)(sp, parameters; check_bounds=false)
     # calculate S
     S = 0.0
     if sp.errors_defined && !sqf.scan_mode
-        S = _S_weighted(scaled_data, interval, sqf.N_steps, sqf.weigth_density)
+        S = _S_weighted(scaled_data, interval, sqf.N_steps, sqf.weight_density)
     else
         S = _S_unweighted(scaled_data, interval, sqf.N_steps)
     end
@@ -120,7 +113,7 @@ function _S_unweighted(scaled_data, interval, N_steps)
     return S
 end
 
-function _S_weighted(scaled_data, interval, N_steps, weigth_density)
+function _S_weighted(scaled_data, interval, N_steps, weight_density)
 
     # create spline for each system size
     y_splines = [
@@ -138,7 +131,7 @@ function _S_weighted(scaled_data, interval, N_steps, weigth_density)
         x_r = scaled_data[l].xs[i_r]
         dp_densities[l] = (i_r - i_l - 1) / (x_r - x_l)
     end
-    !weigth_density && (dp_densities .= 1.0)
+    !weight_density && (dp_densities .= 1.0)
 
     xvals = range(interval[1], interval[2], length=N_steps)
     yvals = zeros(Measurement, length(scaled_data), N_steps)
@@ -252,7 +245,7 @@ function fit_mastercurve(scaled_data, i, j)
     all(ws .== 0.0) && (ws .= 1.0)
     ws .= 1 ./ ws .^ 2
 
-    # if there are single zero errors, set weigth to max(ws \ Inf)
+    # if there are single zero errors, set weight to max(ws \ Inf)
     for i in eachindex(ws)
         isinf(ws[i]) && (ws[i] = maximum(ws[isfinite.(ws)]))
     end
@@ -272,22 +265,3 @@ function fit_mastercurve(scaled_data, i, j)
 
     return Y_ij, dY2_ij
 end
-
-
-
-
-
-
-
-
-struct T
-    a::Int
-end
-
-T(1)
-
-function (t::T)(x)
-    t.a
-end
-
-T(1)(4)
