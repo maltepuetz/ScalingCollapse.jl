@@ -120,10 +120,11 @@ function unzip_data(
 ) where {T1,T2,T3<:Real,T4<:Integer}
 
     # get ordering of ys and check for consistency
+
     correct_ordering = true
-    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    size(ys, 1) == length(Ls) && (correct_ordering = false)
+    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
     @assert size(xs) == size(ys)
-    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)#
     @assert size(ys) == size(es)
 
     # unzip data
@@ -188,9 +189,9 @@ function unzip_data(
 
     # get ordering of ys and check for consistency
     correct_ordering = true
-    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    size(ys, 1) == length(Ls) && (correct_ordering = false)
     @assert correct_ordering ? length(xs) == size(ys, 1) : length(xs) == size(ys, 2)
-    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 2)
+    @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
 
     # unzip data
     data = Vector{Data}(undef, length(Ls))
@@ -223,7 +224,7 @@ function unzip_data(
 
     # get ordering of ys and check for consistency
     correct_ordering = true
-    size(ys, 1) != length(Ls) ? nothing : (correct_ordering == false)
+    size(ys, 1) == length(Ls) && (correct_ordering = false)
     @assert size(xs) == size(ys)
     @assert correct_ordering ? length(Ls) == size(ys, 2) : length(Ls) == size(ys, 1)
 
