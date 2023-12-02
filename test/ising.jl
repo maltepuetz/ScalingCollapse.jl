@@ -8,7 +8,7 @@ susceptibility = read(file, "susceptibility")
 close(file)
 @info "Done. Starting tests..."
 
-@testset "Functionality" begin
+@testset "Ising model 2D" begin
     @testset "Binder cumulant" begin
 
         # create different input variants
