@@ -34,8 +34,15 @@ close(file)
         sp = Scaling.ScalingProblem(_Ts, _binder, Ls;
             sf=Scaling.ScalingFunction(:x, nu=1, p_names=["T_c", "nu"]),
             dx=[-1.0, 1.0],
+            error=false,
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.001)
+        @test try
+            show(sp)
+            true
+        catch
+            false
+        end
 
         sp = Scaling.ScalingProblem(Ts, binder, Ls;
             sf=Scaling.ScalingFunction(:x; p_names=["T_c", "nu"]),
@@ -111,5 +118,53 @@ close(file)
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.01)
+
+        # residual landscape
+        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
+            sf=Scaling.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
+            p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
+            dx=[-1.0, 2.2],
+        )
+        p_space, residuals = Scaling.residuals(sp; dims=[1, 2, 3], N_steps=5)
+        ind = argmin(residuals)
+        @test p_space[1][ind[1]] == sp.optimal_ps[1]
+        @test p_space[2][ind[2]] == sp.optimal_ps[2]
+        @test p_space[3][ind[3]] == sp.optimal_ps[3]
+
+        p_space, residuals = Scaling.residuals(sp; dims=[1, 2], N_steps=5)
+        ind = argmin(residuals)
+        @test p_space[1][ind[1]] == sp.optimal_ps[1]
+        @test p_space[2][ind[2]] == sp.optimal_ps[2]
+
+        p_space, residuals = Scaling.residuals(sp; dims=[1], N_steps=5)
+        ind = argmin(residuals)
+        @test p_space[1][ind[1]] == sp.optimal_ps[1]
+
+        try # test error handling
+            p_space, residuals = Scaling.residuals(sp; dims=[1, 2, 4], N_steps=5)
+            @test false
+        catch
+            @test true
+        end
+        try # test error handling
+            p_space, residuals = Scaling.residuals(sp; dims=[1, 2, 2], N_steps=5)
+            @test false
+        catch
+            @test true
+        end
+        try # test error handling
+            p_space, residuals = Scaling.residuals(sp; dims=[], N_steps=5)
+            @test false
+        catch
+            @test true
+        end
+
+
+        # export scaled data
+        sx, sy, se, sL = Scaling.scaled_data(sp)
+        @test length(sx) == length(sL)
+        @test length(sy) == length(sL)
+        @test length(se) == length(sL)
+        @test sL == Ls
     end
 end
