@@ -262,9 +262,28 @@ function Base.show(io::IO, sp::ScalingProblem)
     end
 end
 
+"""
+    scaled_data(sp::ScalingProblem)
+    scaled_data(sp::ScalingProblem, ps)
 
+Return the scaled data of the `ScalingProblem` `sp`.
+
+# Arguments
+- `sp::ScalingProblem`: scaling problem
+- `ps::Vector{Float64}=sp.optimal_ps`: parameters to scale the data with (manually)
+
+# Returns
+- `xs::Vector{Vector{Float64}}`: scaled x values
+- `ys::Vector{Vector{Float64}}`: scaled y values
+- `es::Vector{Vector{Float64}}`: scaled y error values
+- `Ls::Vector{Float64}`: scaled system sizes
+"""
 function scaled_data(sp::ScalingProblem)
-    scaled_data = [sp.sf.f(sp.data[i], sp.optimal_ps...) for i in eachindex(sp.data)]
+    return scaled_data(sp, sp.optimal_ps)
+end
+
+function scaled_data(sp::ScalingProblem, ps)
+    scaled_data = [sp.sf.f(sp.data[i], ps...) for i in eachindex(sp.data)]
     xs = [scaled_data[i].xs for i in eachindex(scaled_data)]
     ys = [scaled_data[i].ys for i in eachindex(scaled_data)]
     es = [scaled_data[i].es for i in eachindex(scaled_data)]

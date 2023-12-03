@@ -68,7 +68,7 @@ ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"])
 ### Custom scaling function
 ```julia
 # define the function that scales the data
-myfunction(d::Scaling.Data, p1, p2)
+function myfunction(d::Scaling.Data, p1, p2)
 
     #  initialize arrays for scaled data
     xs = zeros(length(d.xs))
@@ -216,7 +216,7 @@ struct ScalingFunction
                 fixed_ps
             )
         else
-            error("Unknown preset: $preset")
+            throw(ArgumentError("Unknown preset: $preset"))
         end
     end
 
@@ -227,12 +227,12 @@ struct ScalingFunction
             if haskey(kwargs, :N_parameters)
                 ["p$i" for i in 1:kwargs[:N_parameters]]
             else
-                error("Please specify either :p_names or :N_parameters")
+                throw(ArgumentError("Please specify either :p_names or :N_parameters"))
             end
         end
         x_scale = get(kwargs, :x_scale, "tmp")
         y_scale = get(kwargs, :y_scale, "tmp")
-        return new(f, p_names, x_scale, y_scale, zeros(3)) # TODO fixed_ps
+        return new(f, p_names, x_scale, y_scale, [Inf for _ in p_names]) # TODO fixed_ps
     end
 
     function ScalingFunction(p_names::Vector{String}; kwargs...)
