@@ -166,5 +166,16 @@ close(file)
         @test length(sy) == length(sL)
         @test length(se) == length(sL)
         @test sL == Ls
+
+        # export scaled data with splines
+        sx, sy, se, sL, xspl, yspl, espl = Scaling.scaled_data(sp; splines=true)
+        @test length(sx) == length(sL)
+        @test length(sy) == length(sL)
+        @test length(se) == length(sL)
+        @test sL == Ls
+        @test length(xspl) == 100
+        @test length(yspl) == 100 * length(Ls)
+        @test length(espl) == 100 * length(Ls)
+
     end
 end
