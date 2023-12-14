@@ -278,16 +278,51 @@ Return the scaled data of the `ScalingProblem` `sp`.
 - `es::Vector{Vector{Float64}}`: scaled y error values
 - `Ls::Vector{Float64}`: scaled system sizes
 """
-function scaled_data(sp::ScalingProblem)
-    return scaled_data(sp, sp.optimal_ps)
+function scaled_data(sp::ScalingProblem; kwargs...)
+    return scaled_data(sp, sp.optimal_ps; kwargs...)
 end
 
-function scaled_data(sp::ScalingProblem, ps)
+function scaled_data(sp::ScalingProblem, ps; kwargs...)
     scaled_data = [sp.sf.f(sp.data[i], ps...) for i in eachindex(sp.data)]
     xs = [scaled_data[i].xs for i in eachindex(scaled_data)]
     ys = [scaled_data[i].ys for i in eachindex(scaled_data)]
     es = [scaled_data[i].es for i in eachindex(scaled_data)]
     Ls = [scaled_data[i].L for i in eachindex(scaled_data)]
+
+    if get(kwargs, :splines, false)
+        if typeof(sp.quality) != Spline
+            throw(ArgumentError("Splines are available only for Spline quality function."))
+        end
+
+        y_splines = [
+            Spline1D(xs[i], ys[i], k=3) for i in eachindex(scaled_data)
+        ]
+        e_splines = [
+            Spline1D(xs[i], es[i], k=1) for i in eachindex(scaled_data)
+        ]
+
+        # set interval
+        interval = Vector{Float64}(undef, 2)
+        interval[1] = max(
+            maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
+            sp.dx[1]
+        )
+        interval[2] = min(
+            minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
+            sp.dx[2]
+        )
+
+        xvals = range(interval[1], interval[2], length=sp.quality.N_steps)
+        yvals = zeros(sp.quality.N_steps, length(scaled_data))
+        evals = zeros(sp.quality.N_steps, length(scaled_data))
+        for l in eachindex(scaled_data)
+            for (i, x) in enumerate(xvals)
+                yvals[i, l] = y_splines[l](x)
+                evals[i, l] = e_splines[l](x)
+            end
+        end
+        return xs, ys, es, Ls, xvals, yvals, evals
+    end
 
     return xs, ys, es, Ls
 end
