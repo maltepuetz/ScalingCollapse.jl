@@ -312,15 +312,30 @@ function scaled_data(sp::ScalingProblem, ps; kwargs...)
             sp.dx[2]
         )
 
-        xvals = range(interval[1], interval[2], length=sp.quality.N_steps)
-        yvals = zeros(sp.quality.N_steps, length(scaled_data))
-        evals = zeros(sp.quality.N_steps, length(scaled_data))
+
+        xvals = [
+            range(interval[1], interval[2], length=sp.quality.N_steps)
+            for _ in eachindex(scaled_data)
+        ]
+        yvals = [zeros(sp.quality.N_steps) for _ in eachindex(scaled_data)]
+        evals = [zeros(sp.quality.N_steps) for _ in eachindex(scaled_data)]
+
         for l in eachindex(scaled_data)
-            for (i, x) in enumerate(xvals)
-                yvals[i, l] = y_splines[l](x)
-                evals[i, l] = e_splines[l](x)
+            for (i, x) in enumerate(xvals[l])
+                yvals[l][i] = y_splines[l](x)
+                evals[l][i] = e_splines[l](x)
             end
         end
+
+        # xvals = range(interval[1], interval[2], length=sp.quality.N_steps)
+        # yvals = zeros(sp.quality.N_steps, length(scaled_data))
+        # evals = zeros(sp.quality.N_steps, length(scaled_data))
+        # for l in eachindex(scaled_data)
+        #     for (i, x) in enumerate(xvals)
+        #         yvals[i, l] = y_splines[l](x)
+        #         evals[i, l] = e_splines[l](x)
+        #     end
+        # end
         return xs, ys, es, Ls, xvals, yvals, evals
     end
 
