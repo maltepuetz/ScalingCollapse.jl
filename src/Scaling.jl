@@ -7,6 +7,7 @@ using Statistics
 
 export ScalingProblem
 export ScalingFunction
+export SingleMasterCurve
 export Spline
 export Houdayer
 export residuals

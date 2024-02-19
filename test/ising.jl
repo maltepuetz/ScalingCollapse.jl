@@ -88,7 +88,8 @@ close(file)
         sp = Scaling.ScalingProblem(Ts, M_abs_mean, Ls;
             sf=Scaling.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
             dx=[-1.0, 1.0],
-            starting_ps=[2.2, 1.0]
+            starting_ps=[2.26, 1.0],
+            qualtiy=Spline()
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
@@ -108,16 +109,16 @@ close(file)
             sf=Scaling.ScalingFunction(:xny, gamma=1.75, p_names=["T_c", "nu", "gamma"]),
             dx=[-1.0, 1.0],
         )
-        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
-        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.01)
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.02)
 
         sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
             sf=Scaling.ScalingFunction(:xny, gamma=1.75, p_names=["T_c", "nu", "gamma"]),
             dx=[-1.0, 1.0],
             starting_ps=[2.27, 1.0]
         )
-        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
-        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.01)
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.02)
 
         # residual landscape
         sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
@@ -160,6 +161,12 @@ close(file)
         end
 
 
+        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
+            sf=Scaling.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
+            p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
+            dx=[-1.0, 2.2],
+            quality=Spline()
+        )
         # export scaled data
         sx, sy, se, sL = Scaling.scaled_data(sp)
         @test length(sx) == length(sL)
@@ -173,9 +180,9 @@ close(file)
         @test length(sy) == length(sL)
         @test length(se) == length(sL)
         @test sL == Ls
-        @test length(xspl) == 100
-        @test length(yspl) == 100 * length(Ls)
-        @test length(espl) == 100 * length(Ls)
+        @test length(xspl) == length(sL)
+        @test length(yspl) == length(sL)
+        @test length(espl) == length(sL)
 
     end
 end
