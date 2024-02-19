@@ -161,7 +161,7 @@ mutable struct ScalingProblem
             skip_scan = true
         end
         quality_scan = get(kwargs, :quality_scan, Spline(scan_mode=true))
-        quality = get(kwargs, :quality, Spline())
+        quality = get(kwargs, :quality, SingleMasterCurve())
 
         @assert length(p_space) == n_parameters(sf)
 
