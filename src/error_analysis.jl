@@ -9,7 +9,7 @@ function error_analysis!(sp)
             y = sp.quality(
                 sp,
                 sp.optimal_ps .+ x .* _one_vector(i, length(sp.optimal_ps))
-            ) / sp.minimum - 1.3
+            ) / sp.minimum - sp.error_threshold
             return y
         end
 
