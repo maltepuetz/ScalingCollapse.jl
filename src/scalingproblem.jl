@@ -106,7 +106,7 @@ mutable struct ScalingProblem
     skip_scan::Bool
     starting_ps::Vector{Float64}
     errors_defined::Bool
-    error_threshold::Float64
+    error_threshold::Vector{Float64}
 
 
 
@@ -165,7 +165,10 @@ mutable struct ScalingProblem
         end
         quality_scan = get(kwargs, :quality_scan, Spline(scan_mode=true))
         quality = get(kwargs, :quality, SingleMasterCurve())
-        error_threshold = get(kwargs, :error_threshold, 1.3)
+        error_threshold = get(kwargs, :error_threshold, 1.3 .* ones(n_parameters(sf)))
+        if !isa(error_threshold, Vector)
+            error_threshold = error_threshold .* ones(n_parameters(sf))
+        end
 
         @assert length(p_space) == n_parameters(sf)
 
