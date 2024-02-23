@@ -3,7 +3,7 @@
 
 
     # custom scaling function
-    function myfunction(d::Scaling.Data, p1, p2)
+    function myfunction(d::ScalingCollapse.Data, p1, p2)
 
         #  initialize arrays for scaled data
         xs = zeros(length(d.xs))
@@ -18,18 +18,18 @@
         end
 
         # create new Data object with scaled data
-        return Scaling.Data(d.L, xs, ys, es)
+        return ScalingCollapse.Data(d.L, xs, ys, es)
     end
 
     sf = ScalingFunction(myfunction; p_names=["myp1", "myp2"])
-    @test Scaling.n_parameters(sf) == 2
-    @test Scaling.scaled_p_names(sf) == ["myp1", "myp2"]
-    @test length(Scaling.fixed_p_names(sf)) == 0
+    @test ScalingCollapse.n_parameters(sf) == 2
+    @test ScalingCollapse.scaled_p_names(sf) == ["myp1", "myp2"]
+    @test length(ScalingCollapse.fixed_p_names(sf)) == 0
 
     sf = ScalingFunction(myfunction; N_parameters=2)
-    @test Scaling.n_parameters(sf) == 2
-    @test Scaling.scaled_p_names(sf) == ["p1", "p2"]
-    @test length(Scaling.fixed_p_names(sf)) == 0
+    @test ScalingCollapse.n_parameters(sf) == 2
+    @test ScalingCollapse.scaled_p_names(sf) == ["p1", "p2"]
+    @test length(ScalingCollapse.fixed_p_names(sf)) == 0
 
     try # error handling
         sf = ScalingFunction(myfunction)
@@ -41,12 +41,12 @@
 
     # implicit preset via p_names
     sf = ScalingFunction(["T_c", "nu", "beta"])
-    @test Scaling.n_parameters(sf) == 3
-    @test Scaling.scaled_p_names(sf) == ["T_c", "nu", "beta"]
+    @test ScalingCollapse.n_parameters(sf) == 3
+    @test ScalingCollapse.scaled_p_names(sf) == ["T_c", "nu", "beta"]
 
 
     try # error handling
-        sf = Scaling.ScalingFunction(:xyxy)
+        sf = ScalingCollapse.ScalingFunction(:xyxy)
         @test false
     catch
         @test true

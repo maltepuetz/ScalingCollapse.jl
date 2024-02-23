@@ -22,7 +22,7 @@ given parameter space.
 # Example
 ```julia
 # lets say our xs, ys and Ls are data for the susceptibility of the Ising model
-using Scaling
+using ScalingCollapse
 sp = ScalingProblem(xs, ys, Ls;
     sc=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
     dx=[-1.0, 2.0],

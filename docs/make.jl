@@ -1,16 +1,16 @@
-using Scaling
+using ScalingCollapse
 using Documenter
 
-DocMeta.setdocmeta!(Scaling, :DocTestSetup, :(using Scaling); recursive=true)
+DocMeta.setdocmeta!(ScalingCollapse, :DocTestSetup, :(using ScalingCollapse); recursive=true)
 
 makedocs(;
-    modules=[Scaling],
+    modules=[ScalingCollapse],
     authors="Malte Pütz",
-    repo="https://github.com/maltepuetz/Scaling.jl/blob/{commit}{path}#{line}",
-    sitename="Scaling.jl",
+    repo="https://github.com/maltepuetz/ScalingCollapse.jl/blob/{commit}{path}#{line}",
+    sitename="ScalingCollapse.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://maltepuetz.github.io/Scaling.jl",
+        canonical="https://maltepuetz.github.io/ScalingCollapse.jl",
         edit_link="main",
         assets=String[],
     ),
@@ -20,6 +20,6 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/maltepuetz/Scaling.jl",
+    repo="github.com/maltepuetz/ScalingCollapse.jl",
     devbranch="main",
 )

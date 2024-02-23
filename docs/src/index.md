@@ -1,14 +1,14 @@
 ```@meta
-CurrentModule = Scaling
+CurrentModule = ScalingCollapse
 ```
 
-# Scaling
+# ScalingCollapse
 
-Documentation for [Scaling](https://github.com/maltepuetz/Scaling.jl).
+Documentation for [ScalingCollapse](https://github.com/maltepuetz/ScalingCollapse.jl).
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [Scaling]
+Modules = [ScalingCollapse]
 ```

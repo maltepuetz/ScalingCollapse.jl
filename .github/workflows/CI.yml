@@ -71,6 +71,6 @@ jobs:
       - run: |
           julia --project=docs -e '
             using Documenter: DocMeta, doctest
-            using Scaling
-            DocMeta.setdocmeta!(Scaling, :DocTestSetup, :(using Scaling); recursive=true)
-            doctest(Scaling)'
+            using ScalingCollapse
+            DocMeta.setdocmeta!(ScalingCollapse, :DocTestSetup, :(using ScalingCollapse); recursive=true)
+            doctest(ScalingCollapse)'
