@@ -1,4 +1,4 @@
-# Scaling
+# ScalingCollapse
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://maltepuetz.github.io/ScalingCollapse.jl/stable/)
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://maltepuetz.github.io/ScalingCollapse.jl/dev/)
@@ -7,20 +7,20 @@
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
 
 
-This is a package for automatic finite size scaling. Finite size scaling is a method to determine the critical parameters of a phase transition by exploiting, so called, finite size effects. This package implements an automatic optimization algorithm to find the best parameters for a finite size scaling analysis automatically.
+This is a package for automatic finite size scaling. Finite size scaling is a method to determine the critical parameters of a phase transition by exploiting, so called, finite size effects. This package implements an automatic optimization algorithm to find the best parameters for a finite size scaling collapse.
 
 It is still in early development, so expect bugs and breaking changes. Feel free to create issues in case you stumble upon any problems!
 
 ## Installation
 For installation run the following command:
 ```julia
-julia> using Pkg; Pkg.add("https://github.com/maltepuetz/Scaling.jl.git")
+julia> using Pkg; Pkg.add("https://github.com/maltepuetz/ScalingCollapse.jl.git")
 ```
 
 ## Getting started
-In order to find the best parameters for a finite size scaling analysis, we need to create a `ScalingProblem`. Lets say we have data for the binder cumulant of the 2D Ising model `binder` for different temperatures `Ts` and different system sizes `Ls`. We want to find the critical temperature and the critical exponent of the correlation length. Let's create a `ScalingProblem` as follows:
+To find the best parameters for a finite size scaling analysis, we need to create a `ScalingProblem`. Lets say we have data for the binder cumulant of the 2D Ising model `binder` for different temperatures `Ts` and different system sizes `Ls`. We want to find the critical temperature and the critical exponent of the correlation length. Let's create a `ScalingProblem` as follows:
 ```julia
-using Scaling
+using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x),
     dx = [-1.0, 1.0],
@@ -43,7 +43,7 @@ Note that you can also create your own scaling function! We can make our scaling
 
 Now that we know all that lets do another scaling problem. This time we know that the critical temperature is somewhere between `T_c = 2.0` and `T_c = 2.4` and the critical exponent is somewhere between `nu = 0.5` and `nu = 1.5`. We can set the parameter space accordingly:
 ```julia
-using Scaling
+using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x; p_names = ["T_c", "nu"]),
     dx = [-1.0, 1.0],
@@ -55,7 +55,7 @@ We limited the parameter space so the algorithm runs faster, calculated some err
 ### Fixing parameters
 Let's say that we know from our statistical mechanics course that the critical exponent of the correlation length is `nu = 1`. We can fix this parameter by passing it as a kwarg to the `ScalingFunction` constructor.
 ```julia
-using Scaling
+using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x; p_names = ["T_c", "nu"], nu=1),
     dx = [-1.0, 1.0],

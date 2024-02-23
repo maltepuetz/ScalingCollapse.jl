@@ -15,8 +15,8 @@ close(file)
         _Ts = [Ts for _ in eachindex(Ls)]
         _binder = [binder[:, i] for i in eachindex(Ls)]
 
-        sp = Scaling.ScalingProblem(_Ts, _binder, Ls;
-            sf=Scaling.ScalingFunction(:x),
+        sp = ScalingCollapse.ScalingProblem(_Ts, _binder, Ls;
+            sf=ScalingCollapse.ScalingFunction(:x),
             p_space=[0.1:0.1:3, 0.1:0.1:3],
             dx=[-1.0, 1.0],
         )
@@ -31,8 +31,8 @@ close(file)
         end
         _binder = binder
 
-        sp = Scaling.ScalingProblem(_Ts, _binder, Ls;
-            sf=Scaling.ScalingFunction(:x, nu=1, p_names=["T_c", "nu"]),
+        sp = ScalingCollapse.ScalingProblem(_Ts, _binder, Ls;
+            sf=ScalingCollapse.ScalingFunction(:x, nu=1, p_names=["T_c", "nu"]),
             dx=[-1.0, 1.0],
             error=false,
         )
@@ -44,16 +44,16 @@ close(file)
             false
         end
 
-        sp = Scaling.ScalingProblem(Ts, binder, Ls;
-            sf=Scaling.ScalingFunction(:x; p_names=["T_c", "nu"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
+            sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
             dx=[-1.0, 1.0],
             starting_ps=[2.27, 1.0]
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
 
-        sp = Scaling.ScalingProblem(Ts, binder, Ls;
-            sf=Scaling.ScalingFunction(:x; p_names=["T_c", "nu"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
+            sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
             dx=[-1.0, 1.0],
             starting_ps=[2.27, 1.0],
             error=true
@@ -71,22 +71,22 @@ close(file)
 
     @testset "Magnetization" begin
 
-        sp = Scaling.ScalingProblem(Ts, M_abs_mean, Ls;
+        sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
             dx=[-1.0, 1.0],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
         @test isapprox(sp.optimal_ps[3], 0.125; atol=0.015)
 
-        sp = Scaling.ScalingProblem(Ts, M_abs_mean, Ls;
-            sf=Scaling.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
             dx=[-1.0, 1.0],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
 
-        sp = Scaling.ScalingProblem(Ts, M_abs_mean, Ls;
-            sf=Scaling.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
             dx=[-1.0, 1.0],
             starting_ps=[2.26, 1.0],
             qualtiy=Spline()
@@ -97,23 +97,29 @@ close(file)
 
     @testset "Susceptibility" begin
 
-        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
-            sf=Scaling.ScalingFunction(:xny),
+        sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xny),
             dx=[-1.0, 1.0],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
         @test isapprox(sp.optimal_ps[3], 1.75; atol=0.2)
 
-        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
-            sf=Scaling.ScalingFunction(:xny, gamma=1.75, p_names=["T_c", "nu", "gamma"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xny,
+                gamma=1.75,
+                p_names=["T_c", "nu", "gamma"]
+            ),
             dx=[-1.0, 1.0],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.02)
 
-        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
-            sf=Scaling.ScalingFunction(:xny, gamma=1.75, p_names=["T_c", "nu", "gamma"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xny,
+                gamma=1.75,
+                p_names=["T_c", "nu", "gamma"]
+            ),
             dx=[-1.0, 1.0],
             starting_ps=[2.27, 1.0]
         )
@@ -121,61 +127,61 @@ close(file)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.02)
 
         # residual landscape
-        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
-            sf=Scaling.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
             p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
             dx=[-1.0, 2.2],
         )
-        p_space, residuals = Scaling.residuals(sp; dims=[1, 2, 3], N_steps=5)
+        p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2, 3], N_steps=5)
         ind = argmin(residuals)
         @test p_space[1][ind[1]] == sp.optimal_ps[1]
         @test p_space[2][ind[2]] == sp.optimal_ps[2]
         @test p_space[3][ind[3]] == sp.optimal_ps[3]
 
-        p_space, residuals = Scaling.residuals(sp; dims=[1, 2], N_steps=5)
+        p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2], N_steps=5)
         ind = argmin(residuals)
         @test p_space[1][ind[1]] == sp.optimal_ps[1]
         @test p_space[2][ind[2]] == sp.optimal_ps[2]
 
-        p_space, residuals = Scaling.residuals(sp; dims=[1], N_steps=5)
+        p_space, residuals = ScalingCollapse.residuals(sp; dims=[1], N_steps=5)
         ind = argmin(residuals)
         @test p_space[1][ind[1]] == sp.optimal_ps[1]
 
         try # test error handling
-            p_space, residuals = Scaling.residuals(sp; dims=[1, 2, 4], N_steps=5)
+            p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2, 4], N_steps=5)
             @test false
         catch
             @test true
         end
         try # test error handling
-            p_space, residuals = Scaling.residuals(sp; dims=[1, 2, 2], N_steps=5)
+            p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2, 2], N_steps=5)
             @test false
         catch
             @test true
         end
         try # test error handling
-            p_space, residuals = Scaling.residuals(sp; dims=[], N_steps=5)
+            p_space, residuals = ScalingCollapse.residuals(sp; dims=[], N_steps=5)
             @test false
         catch
             @test true
         end
 
 
-        sp = Scaling.ScalingProblem(Ts, susceptibility, Ls;
-            sf=Scaling.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
+        sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
             p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
             dx=[-1.0, 2.2],
             quality=Spline()
         )
         # export scaled data
-        sx, sy, se, sL = Scaling.scaled_data(sp)
+        sx, sy, se, sL = ScalingCollapse.scaled_data(sp)
         @test length(sx) == length(sL)
         @test length(sy) == length(sL)
         @test length(se) == length(sL)
         @test sL == Ls
 
         # export scaled data with splines
-        sx, sy, se, sL, xspl, yspl, espl = Scaling.scaled_data(sp; splines=true)
+        sx, sy, se, sL, xspl, yspl, espl = ScalingCollapse.scaled_data(sp; splines=true)
         @test length(sx) == length(sL)
         @test length(sy) == length(sL)
         @test length(se) == length(sL)

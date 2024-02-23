@@ -1,4 +1,4 @@
-module Scaling
+module ScalingCollapse
 
 using Dierckx
 using Measurements

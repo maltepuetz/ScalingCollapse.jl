@@ -1,6 +1,6 @@
-module InteractiveScaling
+module InteractiveScalingCollapse
 
-using Scaling
+using ScalingCollapse
 using GLMakie
 
 
@@ -218,8 +218,8 @@ function plot(sp::ScalingProblem;
 
     ##### residuals ############################
     ax_res = Axis(fig[3, 2];
-        xlabel=Scaling.scaled_p_names(sp.sf)[dims[1]],
-        ylabel=Scaling.scaled_p_names(sp.sf)[dims[2]],
+        xlabel=ScalingCollapse.scaled_p_names(sp.sf)[dims[1]],
+        ylabel=ScalingCollapse.scaled_p_names(sp.sf)[dims[2]],
     )
 
     Makie.deactivate_interaction!(ax_res, :rectanglezoom)

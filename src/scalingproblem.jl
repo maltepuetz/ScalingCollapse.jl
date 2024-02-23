@@ -8,7 +8,7 @@ Create a scaling problem which solves on initialization.
 - `ys`: y values of the data
 - `es`: y error values of the data (optional)
 - `Ls`: system sizes of the data
-For more information on the arguments, see methods(Scaling.unzip_data).
+For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 
 # Keyword Arguments
 - `sf::ScalingFunction=ScalingFunction(preset; kwargs...)`: scaling function
@@ -43,7 +43,7 @@ For more information on the arguments, see methods(Scaling.unzip_data).
 
 # Examples
 ```julia
-using Scaling
+using ScalingCollapse
 ```
 
 ### rescale the x axis only
@@ -334,16 +334,6 @@ function scaled_data(sp::ScalingProblem, ps; kwargs...)
                 evals[l][i] = e_splines[l](x)
             end
         end
-
-        # xvals = range(interval[1], interval[2], length=sp.quality.N_steps)
-        # yvals = zeros(sp.quality.N_steps, length(scaled_data))
-        # evals = zeros(sp.quality.N_steps, length(scaled_data))
-        # for l in eachindex(scaled_data)
-        #     for (i, x) in enumerate(xvals)
-        #         yvals[i, l] = y_splines[l](x)
-        #         evals[i, l] = e_splines[l](x)
-        #     end
-        # end
         return xs, ys, es, Ls, xvals, yvals, evals
     end
 

@@ -68,7 +68,7 @@ ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"])
 ### Custom scaling function
 ```julia
 # define the function that scales the data
-function myfunction(d::Scaling.Data, p1, p2)
+function myfunction(d::ScalingCollapse.Data, p1, p2)
 
     #  initialize arrays for scaled data
     xs = zeros(length(d.xs))
@@ -83,7 +83,7 @@ function myfunction(d::Scaling.Data, p1, p2)
     end
 
     # create new Data object with scaled data
-    return Scaling.Data(d.L, xs, ys, es)
+    return ScalingCollapse.Data(d.L, xs, ys, es)
 end
 
 ScalingFunction(myfunction; p_names=["myp1", "myp2"])
