@@ -79,9 +79,19 @@ function _parameter_combinations(p_space)
             [X[1][i], X[2][j], X[3][k]]
             for i in eachindex(X[1]), j in eachindex(X[2]), k in eachindex(X[3])
         ]
-    end
+    elseif length(X) == 4
+        return [
+            [X[1][i], X[2][j], X[3][k], X[4][l]]
+            for i in eachindex(X[1]), j in eachindex(X[2]), k in eachindex(X[3]), l in eachindex(X[4])
+        ]
+    elseif length(X) == 5
+        return [
+            [X[1][i], X[2][j], X[3][k], X[4][l], X[5][m]]
+            for i in eachindex(X[1]), j in eachindex(X[2]), k in eachindex(X[3]), l in eachindex(X[4]), m in eachindex(X[5])
+        ]
+    else
     error(
-        "Not implemented for more than 3 parameters - " *
+        "Not implemented for more than 5 parameters - " *
         "feel free to create an issue on GitHub! :)"
     )
 end
