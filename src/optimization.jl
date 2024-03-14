@@ -90,10 +90,11 @@ function _parameter_combinations(p_space)
             for i in eachindex(X[1]), j in eachindex(X[2]), k in eachindex(X[3]), l in eachindex(X[4]), m in eachindex(X[5])
         ]
     else
-    error(
-        "Not implemented for more than 5 parameters - " *
-        "feel free to create an issue on GitHub! :)"
-    )
+        error(
+            "Not implemented for more than 5 parameters - " *
+            "feel free to create an issue on GitHub! :)"
+        )
+    end
 end
 
 # small helper function to find local minimal parameter combinations
