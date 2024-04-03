@@ -10,6 +10,7 @@ export ScalingFunction
 export SingleMasterCurve
 export Spline
 export Houdayer
+export SingleSpline
 export residuals
 export scaled_data
 
