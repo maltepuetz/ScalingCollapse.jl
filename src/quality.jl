@@ -385,18 +385,18 @@ function (sqf::SingleSpline)(sp, parameters; check_bounds = false)
 	)
 
 	# check whether the constructed optimization interval is valid
-    if interval[1] > interval[2]
-        @error "Interval is invalid: $(interval[1]) > $(interval[2])"
-        return Inf
-    end
+	if interval[1] > interval[2]
+		@error "Interval is invalid: $(interval[1]) > $(interval[2])"
+		return Inf
+	end
 
 
 	# calculate S
 	S = 0.0
-	if sp.errors_defined && !sqf.scan_mode
-		S = _SimpleSpline_weighted(scaled_data, interval)
+	if sp.errors_defined
+		S = _SingleSpline_weighted(scaled_data, interval)
 	else
-		S = _SimpleSpline_unweighted(scaled_data, interval)
+		S = _SingleSpline_unweighted(scaled_data, interval)
 	end
 
 	return S
@@ -404,46 +404,59 @@ end
 
 function _SingleSpline_unweighted(scaled_data, interval)
 
-    # merge all sizes into one array
-    xs = reduce(vcat, [scaled_data[i].xs for i in eachindex(scaled_data)])
-    ys = reduce(vcat, [scaled_data[i].ys for i in eachindex(scaled_data)])
+	# merge all sizes into one array
+	xs = reduce(vcat, [scaled_data[i].xs for i in eachindex(scaled_data)])
+	ys = reduce(vcat, [scaled_data[i].ys for i in eachindex(scaled_data)])
 
-    # mask data points outside of interval
-    mask = (interval[1] .<= xs) .& (xs .<= interval[2])
-    xs = xs[mask]
-    ys = ys[mask]
+	# mask data points outside of interval
+	mask = (interval[1] .<= xs) .& (xs .<= interval[2])
+	xs = xs[mask]
+	ys = ys[mask]
 
-    # sort data points based on x values
-    perm = sortperm(xs)
-    xs = xs[perm]
-    ys = ys[perm]
+	# sort data points based on x values
+	perm = sortperm(xs)
+	xs = xs[perm]
+	ys = ys[perm]
 
-	# create single spline
-	spl = Spline1D(xs, ys, k = 3)
-	return spl.fp
+	try
+		spl = Spline1D(xs, ys; w = ws, k = 3, s = 0.3)
+		if !isfinite(residual)
+			return Inf
+		end
+		return spl.fp
+	catch
+		return Inf
+	end
 end
 
 function _SingleSpline_weighted(scaled_data, interval)
 
 	# merge all sizes into one array
-    xs = reduce(vcat, [scaled_data[i].xs for i in eachindex(scaled_data)])
-    ys = reduce(vcat, [scaled_data[i].ys for i in eachindex(scaled_data)])
-    es = reduce(vcat, [scaled_data[i].es for i in eachindex(scaled_data)])
+	xs = reduce(vcat, [scaled_data[i].xs for i in eachindex(scaled_data)])
+	ys = reduce(vcat, [scaled_data[i].ys for i in eachindex(scaled_data)])
+	es = reduce(vcat, [scaled_data[i].es for i in eachindex(scaled_data)])
 
-    # mask data points outside of interval
-    mask = (interval[1] .<= xs) .& (xs .<= interval[2])
-    xs = xs[mask]
-    ys = ys[mask]
-    es = es[mask]
+	# mask data points outside of interval
+	mask = (interval[1] .<= xs) .& (xs .<= interval[2])
+	xs = xs[mask]
 
-    # sort data points based on x values
-    perm = sortperm(xs)
-    xs = xs[perm]
-    ys = ys[perm]
-    es = es[perm] .+ 1e-9 # add small number to avoid division by zero
-    ws = 1 ./ es 
+	ys = ys[mask]
+	es = es[mask]
 
-    # create single spline
-    spl = Spline1D(xs, ys, ws, k = 3)
-    return spl.fp
+	# sort data points based on x values
+	perm = sortperm(xs)
+	xs = xs[perm]
+	ys = ys[perm]
+	es = es[perm] .+ 1e-9 # add small number to avoid division by zero
+	ws = 1 ./ es
+
+	try
+		spl = Spline1D(xs, ys; w = ws, k = 3, s = 0.3)
+		if !isfinite(residual)
+			return Inf
+		end
+		return spl.fp
+	catch
+		return Inf
+	end
 end
