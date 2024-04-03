@@ -48,6 +48,16 @@ TO BE DOCUMENTED
 struct Houdayer <: QualityFunction end
 
 
+"""
+	SingleSpline()
+
+Quality function that uses a single spline to interpolate all scaled data points. The quality is then determined by the quality of the spline interpolation.
+"""
+
+struct SingleSpline <: QualityFunction end
+
+
+
 
 ##### Single Master Curve Quality Function #####
 function (::SingleMasterCurve)(sp, parameters; check_bounds = false)
@@ -345,4 +355,95 @@ function fit_mastercurve(scaled_data, i, j)
 	dY2_ij = 1 / Delta * (Kxx - 2 * scaled_data[i].xs[j] * Kx + scaled_data[i].xs[j]^2 * K)
 
 	return Y_ij, dY2_ij
+end
+
+
+### Single Spline Quality Function ###
+
+function (sqf::SingleSpline)(sp, parameters; check_bounds = false)
+
+	# check if parameters are in bounds -- if not return Inf
+	if check_bounds
+		for (i, p) in enumerate(parameters)
+			if p < sp.p_space[i][1] || p > sp.p_space[i][end]
+				return Inf
+			end
+		end
+	end
+
+	scaled_data = [sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
+
+	# set interval in which we want to optimize
+	interval = Vector{Float64}(undef, 2)
+	interval[1] = max(
+		maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
+		sp.dx[1],
+	)
+	interval[2] = min(
+		minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
+		sp.dx[2],
+	)
+
+	# check whether the constructed optimization interval is valid
+    if interval[1] > interval[2]
+        @error "Interval is invalid: $(interval[1]) > $(interval[2])"
+        return Inf
+    end
+
+
+	# calculate S
+	S = 0.0
+	if sp.errors_defined && !sqf.scan_mode
+		S = _SimpleSpline_weighted(scaled_data, interval)
+	else
+		S = _SimpleSpline_unweighted(scaled_data, interval)
+	end
+
+	return S
+end
+
+function _SingleSpline_unweighted(scaled_data, interval)
+
+    # merge all sizes into one array
+    xs = reduce(vcat, [scaled_data[i].xs for i in eachindex(scaled_data)])
+    ys = reduce(vcat, [scaled_data[i].ys for i in eachindex(scaled_data)])
+
+    # mask data points outside of interval
+    mask = (interval[1] .<= xs) .& (xs .<= interval[2])
+    xs = xs[mask]
+    ys = ys[mask]
+
+    # sort data points based on x values
+    perm = sortperm(xs)
+    xs = xs[perm]
+    ys = ys[perm]
+
+	# create single spline
+	spl = Spline1D(xs, ys, k = 3)
+	return spl.fp
+end
+
+function _SingleSpline_weighted(scaled_data, interval)
+
+	# merge all sizes into one array
+    xs = reduce(vcat, [scaled_data[i].xs for i in eachindex(scaled_data)])
+    ys = reduce(vcat, [scaled_data[i].ys for i in eachindex(scaled_data)])
+    es = reduce(vcat, [scaled_data[i].es for i in eachindex(scaled_data)])
+
+    # mask data points outside of interval
+    mask = (interval[1] .<= xs) .& (xs .<= interval[2])
+    xs = xs[mask]
+    ys = ys[mask]
+    es = es[mask]
+
+    # sort data points based on x values
+    perm = sortperm(xs)
+    xs = xs[perm]
+    ys = ys[perm]
+    es = es[perm] .+ 1e-9 # add small number to avoid division by zero
+    ws = 1 ./ es 
+
+    # create single spline
+    spl = Spline1D(xs, ys, ws, k = 3)
+    return spl.fp
 end
