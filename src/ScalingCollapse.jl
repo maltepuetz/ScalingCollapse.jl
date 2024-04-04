@@ -4,6 +4,7 @@ using Dierckx
 using Measurements
 using Optim
 using Statistics
+using LinearAlgebra
 
 export ScalingProblem
 export ScalingFunction
