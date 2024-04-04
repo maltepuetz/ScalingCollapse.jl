@@ -276,7 +276,7 @@ function fixed_p_names(sf::ScalingFunction)
     return res
 end
 
-# standart scaling function for 2 parameters
+# standard scaling function for 2 parameters
 function _power_scaling(d::Data, p1, p2)
 
     xs = zeros(length(d.xs))
@@ -296,7 +296,7 @@ function _power_scaling(d::Data, p1, p2)
     return Data(d.L, xs, ys, es)
 end
 
-# standart scaling function for 3 parameters
+# standard scaling function for 3 parameters
 function _power_scaling(d::Data, p1, p2, p3)
 
     xs = zeros(length(d.xs))
