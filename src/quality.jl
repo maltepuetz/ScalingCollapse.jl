@@ -450,13 +450,17 @@ function _SingleSpline_weighted(scaled_data, interval)
 	es = es[perm] .+ 1e-9 # add small number to avoid division by zero
 	ws = 1 ./ es
 
+    knots = collect(range(xs[2], xs[end-1], length = 5))
+
 	try
-		spl = Spline1D(xs, ys; w = ws, k = 3, s = 0.3)
+		spl = Spline1D(xs, ys, knots; w = ws)
 		if !isfinite(residual)
 			return Inf
+            @warn "Residual is not finite"
 		end
 		return spl.fp
 	catch
+        @warn "Spline failed"
 		return Inf
 	end
 end
