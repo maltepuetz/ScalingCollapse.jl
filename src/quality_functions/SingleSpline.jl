@@ -71,7 +71,7 @@ function (sqf::SingleSpline)(sp, parameters; check_bounds=false)
     spline = fit_nspline(xs, ys, knots)
 
     # filter for data points in interval
-    mask = findall(x -> x < interval[1] && x > interval[2], xs)
+    mask = findall(x -> x < interval[2] && x > interval[1], xs)
 
     if sp.errors_defined
         es = es .+ 1e-9  # add small number to avoid division by zero

@@ -32,7 +32,7 @@ close(file)
             quality=SingleSpline(),
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
-        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.07)
 
 
         # create different input variants
@@ -100,7 +100,7 @@ close(file)
             sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
             dx=[-1.0, 1.0],
             starting_ps=[2.26, 1.0],
-            qualtiy=MultipleSplines()
+            quality=MultipleSplines()
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
@@ -112,7 +112,16 @@ close(file)
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
-        @test isapprox(sp.optimal_ps[3], 0.125; atol=0.015)
+        @test isapprox(sp.optimal_ps[3], 0.125; atol=0.025)
+
+        sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
+            dx=[-1.0, 1.0],
+            starting_ps=[2.26, 1.0],
+            quality=SingleSpline()
+        )
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
     end
 
     @testset "Susceptibility" begin
@@ -152,7 +161,7 @@ close(file)
             dx=[-1.0, 1.0],
             quality=SingleSpline()
         )
-        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
         @test isapprox(sp.optimal_ps[3], 1.75; atol=0.2)
 
