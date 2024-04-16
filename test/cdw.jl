@@ -93,7 +93,7 @@ E_L12 = [0.321, 0.398, 0.401, 0.556, 0.531, 0.598, 0.601, 0.592, 0.625, 0.630, 0
         ),
         p_space=[5:0.1:7, 1:0.1:3],
         dx=[-2, 2],
-        quality=Spline()
+        quality=MultipleSplines()
     )
     @test isapprox(sp.optimal_ps[1], 6.0; atol=0.2)
     @test isapprox(sp.optimal_ps[2], 1.75; atol=0.1)

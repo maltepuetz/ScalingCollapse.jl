@@ -14,8 +14,8 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `sf::ScalingFunction=ScalingFunction(preset; kwargs...)`: scaling function
 - `p_space::Vector{StepRangeLen}=[0.1:0.1:3.0 for _ in sf.p_names]`: parameter search space
 - `dx::Vector{Float64}=[-Inf, Inf]`: optimization interval
-- `quality::QualityFunction=Spline()`: quality function
-- `quality_scan::QualityFunction=Spline(scan_mode=true)`: quality function for the
+- `quality::QualityFunction=Linear()`: quality function
+- `quality_scan::QualityFunction=MultipleSplines(scan_mode=true)`: quality function for the
     parameter space scan (it is highly recommended to use the default function here)
 - `verbose::Bool=false`: print information during optimization
 - `starting_ps::Vector{Float64}`: If `starting_ps` are given, there will be no initial
@@ -163,8 +163,8 @@ mutable struct ScalingProblem
             p_space = [-1_000_000:1_000_000 for _ in 1:n_parameters(sf)]
             skip_scan = true
         end
-        quality_scan = get(kwargs, :quality_scan, Spline(scan_mode=true))
-        quality = get(kwargs, :quality, SingleMasterCurve())
+        quality_scan = get(kwargs, :quality_scan, MultipleSplines(scan_mode=true))
+        quality = get(kwargs, :quality, Linear())
         error_threshold = get(kwargs, :error_threshold, 1.3 .* ones(n_parameters(sf)))
         if !isa(error_threshold, Vector)
             error_threshold = error_threshold .* ones(n_parameters(sf))
@@ -298,8 +298,8 @@ function scaled_data(sp::ScalingProblem, ps; kwargs...)
     Ls = [scaled_data[i].L for i in eachindex(scaled_data)]
 
     if get(kwargs, :splines, false)
-        if typeof(sp.quality) != Spline
-            throw(ArgumentError("Splines are available only for Spline quality function."))
+        if typeof(sp.quality) != MultipleSplines
+            throw(ArgumentError("Splines are available only for the MultipleSplines quality function."))
         end
 
         y_splines = [
