@@ -11,4 +11,5 @@ using HDF5
     include("ising.jl")
     include("cdw.jl")
     include("scalingfunction.jl")
+    include("utilityfunctions.jl")
 end

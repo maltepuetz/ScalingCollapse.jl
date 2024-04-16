@@ -65,25 +65,29 @@ end
 
 
 ##### Little Helper Functions #####
-# small helper function to span the parameter space
-function _parameter_combinations(p_space)
-    X = p_space  # for convenience
-    if length(X) == 1
-        return [[X[1][i]] for i in eachindex(X[1])]
-    elseif length(X) == 2
-        return [
-            [X[1][i], X[2][j]] for i in eachindex(X[1]), j in eachindex(X[2])
-        ]
-    elseif length(X) == 3
-        return [
-            [X[1][i], X[2][j], X[3][k]]
-            for i in eachindex(X[1]), j in eachindex(X[2]), k in eachindex(X[3])
-        ]
+### small helper function to span the parameter space
+# iterative function to generate all combinations of parameters
+function _parameter_combinations!(p_space, current_combination=Float64[], all_combinations=Vector{Float64}[])
+    # Base case: if p_space is empty, add the current combination to all_combinations
+    if isempty(p_space)
+        push!(all_combinations, current_combination)
+        return
     end
-    error(
-        "Not implemented for more than 3 parameters - " *
-        "feel free to create an issue on GitHub! :)"
-    )
+
+    # Recursive case: iterate over the first list and combine its elements with the rest
+    first_list = p_space[end]
+    for value in first_list
+        new_combination = [current_combination..., value] # Create a new combination
+        _parameter_combinations!(p_space[1:end-1], new_combination, all_combinations) # Recursive call with the rest of p_space
+    end
+
+    return all_combinations
+end
+
+# Wrapper function to call the iterative function
+function _parameter_combinations(p_space)
+    all_combinations = _parameter_combinations!(p_space)
+    return reshape(all_combinations .|> reverse, [length(p_space[i]) for i in eachindex(p_space)]...)
 end
 
 # small helper function to find local minimal parameter combinations
