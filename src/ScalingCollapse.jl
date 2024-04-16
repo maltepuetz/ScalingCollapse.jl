@@ -1,17 +1,18 @@
 module ScalingCollapse
 
 using Dierckx
+using KissSmoothing
 using Measurements
 using Optim
 using Statistics
 
 export ScalingProblem
 export ScalingFunction
-export SingleMasterCurve
-export Spline
-export Houdayer
 export residuals
 export scaled_data
+
+# export quality functions
+export MultipleSplines, SingleSpline, Linear, Houdayer
 
 include("data.jl")
 include("scalingfunction.jl")
