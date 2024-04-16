@@ -5,6 +5,9 @@
 [![Build Status](https://github.com/maltepuetz/ScalingCollapse.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/maltepuetz/ScalingCollapse.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/maltepuetz/ScalingCollapse.jl/branch/main/graph/badge.svg?token=G2BD929KV0)](https://codecov.io/gh/maltepuetz/ScalingCollapse.jl)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10712427.svg)](https://doi.org/10.5281/zenodo.10712427)
+
+
 
 
 This is a package for automatic finite size scaling. Finite size scaling is a method to determine the critical parameters of a phase transition by exploiting, so called, finite size effects. This package implements an automatic optimization algorithm to find the best parameters for a finite size scaling collapse.

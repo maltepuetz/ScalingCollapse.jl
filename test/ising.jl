@@ -24,6 +24,17 @@ close(file)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
 
 
+        # test with SingleSpline quality function
+        sp = ScalingCollapse.ScalingProblem(_Ts, _binder, Ls;
+            sf=ScalingCollapse.ScalingFunction(:x),
+            p_space=[0.1:0.1:3, 0.1:0.1:3],
+            dx=[-1.0, 1.0],
+            quality=SingleSpline(),
+        )
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
+
+
         # create different input variants
         _Ts = zeros(size(binder))
         for i in axes(_Ts, 2), j in axes(_Ts, 1)
@@ -89,10 +100,19 @@ close(file)
             sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
             dx=[-1.0, 1.0],
             starting_ps=[2.26, 1.0],
-            qualtiy=Spline()
+            qualtiy=MultipleSplines()
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
+
+        # test with SingleSpline quality function
+        sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
+            dx=[-1.0, 1.0],
+            quality=SingleSpline()
+        )
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
+        @test isapprox(sp.optimal_ps[3], 0.125; atol=0.015)
     end
 
     @testset "Susceptibility" begin
@@ -125,6 +145,16 @@ close(file)
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.02)
+
+        # test with SingleSpline quality function
+        sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
+            sf=ScalingCollapse.ScalingFunction(:xny),
+            dx=[-1.0, 1.0],
+            quality=SingleSpline()
+        )
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
+        @test isapprox(sp.optimal_ps[3], 1.75; atol=0.2)
 
         # residual landscape
         sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
@@ -171,7 +201,7 @@ close(file)
             sf=ScalingCollapse.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
             p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
             dx=[-1.0, 2.2],
-            quality=Spline()
+            quality=MultipleSplines()
         )
         # export scaled data
         sx, sy, se, sL = ScalingCollapse.scaled_data(sp)
