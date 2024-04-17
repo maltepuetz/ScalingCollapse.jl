@@ -42,9 +42,9 @@ There are also other preset ScalingFunctions:
 - `:xy` This is the default scaling function. It rescales the x-axis as `x -> (x - p1)/p1 * L^(1/p2)` and the y-axis as `y -> y * L^(p3/p2)`.
 - `:xny` This scaling function is similar to `:xy` but it rescales the y-axis as `y -> y * L^(-p3/p2)`. In this case the critical exponent `p3` has a negative sign.
 
-Note that you can also create your own scaling function! We can make our scaling function looking a little bit cooler by giving our parameters custom names with the kwarg `p_names::Vecor{String}`. 
+Note that you can also create your own scaling function! We can make our scaling function looking a little bit cooler by giving our parameters custom names with the kwarg `p_names::Vector{String}`. 
 
-Now that we know all that lets do another scaling problem. This time we know that the critical temperature is somewhere between `T_c = 2.0` and `T_c = 2.4` and the critical exponent is somewhere between `nu = 0.5` and `nu = 1.5`. We can set the parameter space accordingly:
+Now that we know the basics, let us solve another scaling problem. This time we know that the critical temperature is somewhere between `T_c = 2.0` and `T_c = 2.4` and the critical exponent is somewhere between `nu = 0.5` and `nu = 1.5`. We set the parameter space accordingly:
 ```julia
 using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
