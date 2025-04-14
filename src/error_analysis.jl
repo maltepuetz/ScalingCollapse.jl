@@ -34,20 +34,31 @@ function _one_vector(i, L)
     return res
 end
 
-function _start_deltas(optimal_pi, f::Function)
+function _start_deltas(optimal_pi, f::Function; exp_l=1.0, exp_r=1.0)
 
-    l = -0.1 * optimal_pi
-    while f(l) < 0.0
+    l = -(0.1)^exp_l * optimal_pi
+    r = (0.1)^exp_r * optimal_pi
+
+    fl = f(l)
+    fr = f(r)
+
+    # decrease starting interval if function returns NaN
+    isnan(fl) && (return _start_deltas(optimal_pi, f; exp_l=exp_l + 0.1, exp_r=exp_r))
+    isnan(fr) && (return _start_deltas(optimal_pi, f; exp_l=exp_l, exp_r=exp_r + 0.1))
+
+    while fl < 0.0
         l *= 2.0
+        fl = f(l)
     end
 
-    r = 0.1 * optimal_pi
-    while f(r) < 0.0
+    while fr < 0.0
         r *= 2.0
+        fr = f(r)
     end
 
     return l, r
 end
+
 
 function _root(l, fl, r, fr, f::Function; precision=1e-10)
 
