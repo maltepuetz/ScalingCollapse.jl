@@ -17,7 +17,7 @@ It is still in early development, so expect bugs and breaking changes. Feel free
 ## Installation
 For installation run the following command:
 ```julia
-julia> using Pkg; Pkg.add("https://github.com/maltepuetz/ScalingCollapse.jl.git")
+julia> using Pkg; Pkg.add("ScalingCollapse.jl")
 ```
 
 ## Getting started
