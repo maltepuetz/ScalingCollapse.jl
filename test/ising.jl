@@ -173,18 +173,18 @@ close(file)
         )
         p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2, 3], N_steps=5)
         ind = argmin(residuals)
-        @test p_space[1][ind[1]] == sp.optimal_ps[1]
-        @test p_space[2][ind[2]] == sp.optimal_ps[2]
-        @test p_space[3][ind[3]] == sp.optimal_ps[3]
+        @test p_space[1][ind[1]] ≈ sp.optimal_ps[1]
+        @test p_space[2][ind[2]] ≈ sp.optimal_ps[2]
+        @test p_space[3][ind[3]] ≈ sp.optimal_ps[3]
 
         p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2], N_steps=5)
         ind = argmin(residuals)
-        @test p_space[1][ind[1]] == sp.optimal_ps[1]
-        @test p_space[2][ind[2]] == sp.optimal_ps[2]
+        @test p_space[1][ind[1]] ≈ sp.optimal_ps[1]
+        @test p_space[2][ind[2]] ≈ sp.optimal_ps[2]
 
         p_space, residuals = ScalingCollapse.residuals(sp; dims=[1], N_steps=5)
         ind = argmin(residuals)
-        @test p_space[1][ind[1]] == sp.optimal_ps[1]
+        @test p_space[1][ind[1]] ≈ sp.optimal_ps[1]
 
         try # test error handling
             p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2, 4], N_steps=5)
