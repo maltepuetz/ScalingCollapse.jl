@@ -235,10 +235,10 @@ function Base.show(io::IO, sp::ScalingProblem)
     println(io, "        y -> $(sp.sf.y_scale)")
     if n_parameters(sp.sf) < length(sp.sf.p_names)
         println(io, "    Fixed parameters:")
-        for (i, p) in enumerate(sp.sf.p_names)
-            if sp.sf.fixed_ps[i] != Inf
-                println(io, "        $p = $(sp.sf.fixed_ps[i])")
-            end
+        for i in eachindex(sp.sf.fixed_idxs)
+            idx = sp.sf.fixed_idxs[i]
+            p = sp.sf.p_names[idx]
+            println(io, "        $p = $(sp.sf.fixed_ps[i])")
         end
     end
     println(io, "    Optimal parameters:")

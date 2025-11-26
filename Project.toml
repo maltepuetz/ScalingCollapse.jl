@@ -1,7 +1,7 @@
 name = "ScalingCollapse"
 uuid = "bcf2b353-04f3-4f78-ac0b-80007e341812"
 authors = ["Malte Pütz"]
-version = "0.2.3"
+version = "0.2.4"
 
 [deps]
 Dierckx = "39dd38d3-220a-591b-8e3c-4c3a8c710a94"
