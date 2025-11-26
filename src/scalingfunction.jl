@@ -1,18 +1,3 @@
-function specialize_wrapper(f::Function, fixed_idxs::NTuple{N1,Int}, free_idxs::NTuple{N2,Int}, fixed_vals::NTuple{N1,Float64}) where {N1,N2}
-    return (input, args::Vararg{Float64,N2}) -> begin
-        parameter_tuple = ntuple(Val(N1 + N2)) do index
-            if index in fixed_idxs
-                idx = findfirst(==(index), fixed_idxs)
-                return fixed_vals[idx]
-            else
-                idx = findfirst(==(index), free_idxs)
-                return args[idx]
-            end
-        end
-        f(input, parameter_tuple...)
-    end
-end
-
 """
     ScalingFunction(preset::Symbol; kwargs...)
     ScalingFunction(f::Function; kwargs...)
@@ -134,7 +119,73 @@ struct ScalingFunction
     end
 end
 
-# x scaling with positive exponent
+function specialize_wrapper(f::Function, fixed_idxs::NTuple{N1,Int}, free_idxs::NTuple{N2,Int}, fixed_vals::NTuple{N1,Float64}) where {N1,N2}
+    return (input, args::Vararg{Float64,N2}) -> begin
+        parameter_tuple = ntuple(Val(N1 + N2)) do index
+            if index in fixed_idxs
+                idx = findfirst(==(index), fixed_idxs)
+                return fixed_vals[idx]
+            else
+                idx = findfirst(==(index), free_idxs)
+                return args[idx]
+            end
+        end
+        f(input, parameter_tuple...)
+    end
+end
+
+"""
+    handle_preset(::Val{preset}; kwargs...)
+Helper function to handle presets for ScalingFunction's. You can add your own by
+adding a new method for `handle_preset`. The method should return the function `f`, the
+parameter names `p_names`, the x scaling function `x_scale` and the y scaling function
+`y_scale` as a tuple. The function f should take a `ScalingCollapse.Data` object and the
+parameters of your scaling function and return a new `ScalingCollapse.Data` object which
+contains the scaled data. Like so:
+```julia
+using ScalingCollapse
+function _my_custom_scaling(d::ScalingCollapse.Data, p1, p2)
+
+    xs = zeros(length(d.xs))
+    ys = zeros(length(d.ys))
+    es = zeros(length(d.es))
+
+    for (i, x) in enumerate(d.xs)
+        xs[i] = (x - p1) / p1 * d.L^(1 / p2)
+    end
+    for (i, y) in enumerate(d.ys)
+        ys[i] = y
+    end
+    for (i, e) in enumerate(d.es)
+        es[i] = e
+    end
+
+    return ScalingCollapse.Data(d.L, xs, ys, es)
+end
+```
+`p_names` should be a vector of strings containing the names of the parameters used in the
+scaling function. `x_scale` and `y_scale` are strings containing the scaling functions
+for the x and y values respectively. These are just used for display purposes.
+
+A new preset can then be added like so:
+```julia
+import ScalingCollapse: handle_preset
+function handle_preset(::Val{:my_custom_preset}; kwargs...)
+    f = _my_custom_scaling
+    p_names = ["p1", "p2"]
+    x_scale = "(x - p1)/p1 * L^(1/p2)"
+    y_scale = "y"
+    return f, p_names, x_scale, y_scale
+end
+```
+
+We can now use the new preset like so:
+```julia
+sf = ScalingFunction(:my_custom_preset)
+```
+"""
+function handle_preset end
+
 function handle_preset(::Val{:x}; kwargs...)
     f = get(kwargs, :f, _power_scaling)
     p_names = get(kwargs, :p_names, ["p1", "p2"])
