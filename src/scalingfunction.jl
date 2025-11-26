@@ -1,3 +1,18 @@
+function specialize_wrapper(f::Function, fixed_idxs::NTuple{N1,Int}, free_idxs::NTuple{N2,Int}, fixed_vals::NTuple{N1,Float64}) where {N1,N2}
+    return (input, args::Vararg{Float64,N2}) -> begin
+        parameter_tuple = ntuple(Val(N1 + N2)) do index
+            if index in fixed_idxs
+                idx = findfirst(==(index), fixed_idxs)
+                return fixed_vals[idx]
+            else
+                idx = findfirst(==(index), free_idxs)
+                return args[idx]
+            end
+        end
+        f(input, parameter_tuple...)
+    end
+end
+
 """
     ScalingFunction(preset::Symbol; kwargs...)
     ScalingFunction(f::Function; kwargs...)
@@ -100,180 +115,114 @@ struct ScalingFunction
     x_scale::String
     y_scale::String
     fixed_ps::Vector{Float64}
+    fixed_idxs::Vector{Int}
+    free_idxs::Vector{Int}
 
-    function ScalingFunction(preset::Symbol; kwargs...)
+    function ScalingFunction(f::Function, p_names::Vector{String}, x_scale::String, y_scale::String; kwargs...)
+        fixed_idxs = Tuple(filter(i -> haskey(kwargs, Symbol(p_names[i])), eachindex(p_names)))
+        free_idxs = Tuple(setdiff(eachindex(p_names), fixed_idxs))
+        fixed_vals = Tuple(Float64(kwargs[Symbol(p_names[i])]) for i in fixed_idxs)
+        return new(
+            specialize_wrapper(f, fixed_idxs, free_idxs, fixed_vals),
+            p_names,
+            x_scale,
+            y_scale,
+            collect(fixed_vals),
+            collect(fixed_idxs),
+            collect(free_idxs)
+        )
+    end
+end
 
-        #=
-        Presets:
-            :x    -> x scaling with positive exponent
-            :xy   -> x and y scaling with positive exponents
-            :xny  -> x and y scaling with (pos x), (neg y) exponent
-        =#
+# x scaling with positive exponent
+function handle_preset(::Val{:x}; kwargs...)
+    f = get(kwargs, :f, _power_scaling)
+    p_names = get(kwargs, :p_names, ["p1", "p2"])
+    x_scale = get(kwargs, :x_scale) do
+        "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+    end
+    y_scale = get(kwargs, :y_scale, "y")
+    return f, p_names, x_scale, y_scale
+end
 
-        if preset == :x
-            f = get(kwargs, :f, _power_scaling)
-            p_names = get(kwargs, :p_names, ["p1", "p2"])
-            x_scale = get(
-                kwargs,
-                :x_scale,
-                "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
-            )
-            y_scale = get(kwargs, :y_scale, "y")
+# x and y scaling with (pos x), (pos y) exponent
+function handle_preset(::Val{:xy}; kwargs...)
+    f = get(kwargs, :f, _power_scaling)
+    p_names = get(kwargs, :p_names, ["p1", "p2", "p3"])
+    x_scale = get(kwargs, :x_scale) do
+        "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+    end
+    y_scale = get(kwargs, :y_scale) do
+        "y * L^($(p_names[3])/$(p_names[2]))"
+    end
+    return f, p_names, x_scale, y_scale
+end
 
-            # check whether a parameter was provided as kwarg
-            fixed_ps = [Inf for _ in 1:length(p_names)]
-            for (i, p) in enumerate(p_names)
-                if haskey(kwargs, Symbol(p))
-                    fixed_ps[i] = kwargs[Symbol(p)]
-                end
-            end
+# x and y scaling with (pos x), (neg y) exponent
+function handle_preset(::Val{:xny}; kwargs...)
+    f = get(kwargs, :f) do
+        (d, p1, p2, p3) -> _power_scaling(d, p1, p2, -p3)
+    end
+    p_names = get(kwargs, :p_names, ["p1", "p2", "p3"])
+    x_scale = get(kwargs, :x_scale) do
+        "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+    end
+    y_scale = get(kwargs, :y_scale) do
+        "y * L^(-$(p_names[3])/$(p_names[2]))"
+    end
+    return f, p_names, x_scale, y_scale
+end
 
-            return new(
-                (d, args...) -> f(
-                    d,
-                    (_i = 0; fixed_ps[1] == Inf) ? (_i += 1; args[_i]) : fixed_ps[1],
-                    fixed_ps[2] == Inf ? (_i += 1; args[_i]) : fixed_ps[2]
-                ),
-                p_names,
-                x_scale,
-                y_scale,
-                fixed_ps
-            )
+function handle_preset(::Val{T}; kwargs...) where {T}
+    throw(ArgumentError("Unknown preset: $(T)"))
+end
 
-        elseif preset == :xy
-            f = get(kwargs, :f, _power_scaling)
-            p_names = get(kwargs, :p_names, ["p1", "p2", "p3"])
-            x_scale = get(
-                kwargs,
-                :x_scale,
-                "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))")
-            y_scale = get(
-                kwargs,
-                :y_scale,
-                "y * L^($(p_names[3])/$(p_names[2]))"
-            )
+function ScalingFunction(preset::Symbol; kwargs...)
+    f, p_names, x_scale, y_scale = handle_preset(Val(preset); kwargs...)
+    ScalingFunction(f, p_names, x_scale, y_scale; kwargs...)
+end
 
-            # check whether a parameter was provided as kwarg
-            fixed_ps = [Inf for _ in 1:length(p_names)]
-            for (i, p) in enumerate(p_names)
-                if haskey(kwargs, Symbol(p))
-                    fixed_ps[i] = kwargs[Symbol(p)]
-                end
-            end
+function ScalingFunction(p_names::Vector{String}; kwargs...)
+    if length(p_names) == 2
+        preset = :x
+    elseif length(p_names) == 3
+        preset = :xy
+    else
+        error("no preset supports %$(length(p_names)) parameters")
+    end
+    ScalingFunction(preset, p_names=p_names; kwargs...)
+end
 
-            return new(
-                (d, args...) -> f(
-                    d,
-                    (_i = 0; fixed_ps[1] == Inf) ? (_i += 1; args[_i]) : fixed_ps[1],
-                    fixed_ps[2] == Inf ? (_i += 1; args[_i]) : fixed_ps[2],
-                    fixed_ps[3] == Inf ? (_i += 1; args[_i]) : fixed_ps[3]
-                ),
-                p_names,
-                x_scale,
-                y_scale,
-                fixed_ps
-            )
+function ScalingFunction(; kwargs...)
+    haskey(kwargs, :p_names) && return ScalingFunction(kwargs[:p_names]; kwargs...)
+    return ScalingFunction(:xy; kwargs...)
+end
 
-            #return new(f, p_names, x_scale, y_scale, zeros(3)) # TODO fixed_ps
-
-        elseif preset == :xny
-            # put negative exponent on y
-            f = get(
-                kwargs,
-                :f,
-                (d::Data, p1, p2, p3) -> _power_scaling(d::Data, p1, p2, -p3)
-            )
-            p_names = get(kwargs, :p_names, ["p1", "p2", "p3"])
-            x_scale = get(
-                kwargs,
-                :x_scale,
-                "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
-            )
-            y_scale = get(
-                kwargs,
-                :y_scale,
-                "y * L^(-$(p_names[3])/$(p_names[2]))"
-            )
-
-            # check whether a parameter was provided as kwarg
-            fixed_ps = [Inf for _ in 1:length(p_names)]
-            for (i, p) in enumerate(p_names)
-                if haskey(kwargs, Symbol(p))
-                    fixed_ps[i] = kwargs[Symbol(p)]
-                end
-            end
-
-            return new(
-                (d, args...) -> f(
-                    d,
-                    (_i = 0; fixed_ps[1] == Inf) ? (_i += 1; args[_i]) : fixed_ps[1],
-                    fixed_ps[2] == Inf ? (_i += 1; args[_i]) : fixed_ps[2],
-                    fixed_ps[3] == Inf ? (_i += 1; args[_i]) : fixed_ps[3]
-                ),
-                p_names,
-                x_scale,
-                y_scale,
-                fixed_ps
-            )
+function ScalingFunction(f::Function; kwargs...)
+    p_names = if haskey(kwargs, :p_names)
+        kwargs[:p_names]
+    else
+        if haskey(kwargs, :N_parameters)
+            ["p$i" for i in 1:kwargs[:N_parameters]]
         else
-            throw(ArgumentError("Unknown preset: $preset"))
+            throw(ArgumentError("Please specify either :p_names or :N_parameters"))
         end
     end
-
-    function ScalingFunction(f::Function; kwargs...)
-        p_names = if haskey(kwargs, :p_names)
-            kwargs[:p_names]
-        else
-            if haskey(kwargs, :N_parameters)
-                ["p$i" for i in 1:kwargs[:N_parameters]]
-            else
-                throw(ArgumentError("Please specify either :p_names or :N_parameters"))
-            end
-        end
-        x_scale = get(kwargs, :x_scale, "tmp")
-        y_scale = get(kwargs, :y_scale, "tmp")
-        return new(f, p_names, x_scale, y_scale, [Inf for _ in p_names]) # TODO fixed_ps
-    end
-
-    function ScalingFunction(p_names::Vector{String}; kwargs...)
-        length(p_names) == 2 && return ScalingFunction(:x, p_names=p_names; kwargs...)
-        length(p_names) == 3 && return ScalingFunction(:xy, p_names=p_names; kwargs...)
-    end
-
-    function ScalingFunction(; kwargs...)
-        haskey(kwargs, :p_names) && return ScalingFunction(kwargs[:p_names]; kwargs...)
-        return ScalingFunction(:xy; kwargs...)
-    end
+    x_scale = get(kwargs, :x_scale, "tmp")
+    y_scale = get(kwargs, :y_scale, "tmp")
+    return ScalingFunction(f, p_names, x_scale, y_scale; kwargs...)
 end
 
 function n_parameters(sf::ScalingFunction)
-    n = length(sf.fixed_ps)
-    for p in sf.fixed_ps
-        if p != Inf
-            n -= 1
-        end
-    end
-    return n
+    return length(sf.free_idxs)
 end
 
 function scaled_p_names(sf::ScalingFunction)
-    res = sf.p_names |> copy
-    for i in length(sf.fixed_ps):-1:1
-        if sf.fixed_ps[i] != Inf
-            deleteat!(res, i)
-        end
-    end
-    return res
+    return sf.p_names[sf.free_idxs]
 end
 
 function fixed_p_names(sf::ScalingFunction)
-    res = sf.p_names |> copy
-    for i in length(sf.fixed_ps):-1:1
-        if sf.fixed_ps[i] == Inf
-            deleteat!(res, i)
-        end
-    end
-    return res
+    return sf.p_names[sf.fixed_idxs]
 end
 
 # standart scaling function for 2 parameters
