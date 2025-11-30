@@ -276,41 +276,30 @@ function fixed_p_names(sf::ScalingFunction)
     return sf.p_names[sf.fixed_idxs]
 end
 
-# standart scaling function for 2 parameters
+# standard scaling function for 2 parameters
 function _power_scaling(d::Data, p1, p2)
-
-    xs = zeros(length(d.xs))
-    ys = zeros(length(d.ys))
-    es = zeros(length(d.es))
-
-    for (i, x) in enumerate(d.xs)
-        xs[i] = (x - p1) / p1 * d.L^(1 / p2)
-    end
-    for (i, y) in enumerate(d.ys)
-        ys[i] = y
-    end
-    for (i, e) in enumerate(d.es)
-        es[i] = e
-    end
-
-    return Data(d.L, xs, ys, es)
+    xs = similar(d.xs)
+    prefactor = d.L^(1 / p2) / p1
+    shift = -d.L^(1 / p2)
+    map!(x -> fma(x, prefactor, shift), xs, d.xs)
+    return Data(d.L, xs, copy(d.ys), copy(d.es))
 end
 
-# standart scaling function for 3 parameters
+# standard scaling function for 3 parameters
 function _power_scaling(d::Data, p1, p2, p3)
+    xs = similar(d.xs)
+    ys = similar(d.ys)
+    es = similar(d.es)
 
-    xs = zeros(length(d.xs))
-    ys = zeros(length(d.ys))
-    es = zeros(length(d.es))
+    prefactor_x = d.L^(1 / p2) / p1
+    prefactor_y = d.L^(p3 / p2)
+    shift_x = -d.L^(1 / p2)
+    map!(x -> fma(x, prefactor_x, shift_x), xs, d.xs)
 
-    for (i, x) in enumerate(d.xs)
-        xs[i] = (x - p1) / p1 * d.L^(1 / p2)
-    end
-    for (i, y) in enumerate(d.ys)
-        ys[i] = y * d.L^(p3 / p2)
-    end
-    for (i, e) in enumerate(d.es)
-        es[i] = e * d.L^(p3 / p2)
+    @assert length(ys) == length(es)
+    for i in eachindex(ys)
+        ys[i] = d.ys[i] * prefactor_y
+        es[i] = d.es[i] * prefactor_y
     end
 
     return Data(d.L, xs, ys, es)
