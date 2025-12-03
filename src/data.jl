@@ -15,13 +15,19 @@ struct Data
     ys::Vector{Float64}  # y values
     es::Vector{Float64}  # y error values
     function Data(L, xs, ys, es)
-
         # sort data by x values
+        @assert length(xs) == length(ys) == length(es)
         perm = sortperm(xs)
-        xs = xs[perm]
-        ys = ys[perm]
-        es = es[perm] .|> abs
-        return new(L, xs, ys, es)
+        xsd = similar(xs)
+        ysd = similar(ys)
+        esd = similar(es)
+        for i in eachindex(perm)
+            p = perm[i]
+            xsd[i] = xs[p]
+            ysd[i] = ys[p]
+            esd[i] = abs(es[p])
+        end
+        return new(L, xsd, ysd, esd)
     end
 end
 
