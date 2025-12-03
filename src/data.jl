@@ -69,14 +69,14 @@ function _unzip_data(xs, ys, es, Ls)
     map((L, x, y, e) -> Data(L, x, y, e), Ls, xs, ys, es)
 end
 
-function unzip_data(xs::Union{Vector,Matrix}, ys::Union{Vector,Matrix}, Ls::Vector{Int})
+function unzip_data(xs::Union{Vector,Matrix}, ys::Union{Vector,Matrix}, Ls::Vector{<:Integer})
     Lcount = length(Ls)
     xs_reordered = _unzip_data_aux(xs, Lcount)
     ys_reordered = _unzip_data_aux(ys, Lcount)
     _unzip_data(xs_reordered, ys_reordered, Ls)
 end
 
-function unzip_data(xs::Union{Vector,Matrix}, ys::Union{Vector,Matrix}, es::Union{Vector,Matrix}, Ls::Vector{Int})
+function unzip_data(xs::Union{Vector,Matrix}, ys::Union{Vector,Matrix}, es::Union{Vector,Matrix}, Ls::Vector{<:Integer})
     Lcount = length(Ls)
     xs_reordered = _unzip_data_aux(xs, Lcount)
     ys_reordered = _unzip_data_aux(ys, Lcount)
