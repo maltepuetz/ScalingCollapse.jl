@@ -23,6 +23,11 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
     much faster, but might not find the global minimum.
 - `error::Bool=true`: If `error=true`, the error analysis will be performed to give
     estimates of the uncertainties of the optimal parameters.
+- `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
+    initial simplex and adaptive or fixed algorithm parameters.
+- `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
+    including tolerances, iteration and function-call limits, callbacks, tracing, and
+    warnings.
 
 # Fields
 - `data::Vector{Data}`: data to be scaled
@@ -40,6 +45,8 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `skip_scan::Bool`: `true` if `starting_ps` are given by the user
 - `starting_ps::Vector{Float64}`: starting points for the optimization
 - `errors_defined::Bool`: `true` if errors are given by the user
+- `optimizer::Optim.NelderMead`: Nelder-Mead method configuration
+- `optimizer_options::Optim.Options`: optimization runtime and stopping configuration
 
 # Examples
 ```julia
@@ -81,6 +88,26 @@ ScalingProblem(xs, ys, Ls;
 )
 ```
 
+### configure the Nelder-Mead optimizer
+```julia
+optimizer = ScalingCollapse.Optim.NelderMead(
+    initial_simplex=ScalingCollapse.Optim.AffineSimplexer(a=0.01, b=0.1),
+)
+optimizer_options = ScalingCollapse.Optim.Options(
+    iterations=5_000,
+    x_abstol=1e-10,
+    f_reltol=1e-12,
+    time_limit=60.0,
+)
+
+ScalingProblem(xs, ys, Ls;
+    sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
+    starting_ps=[2.27, 1.0],
+    optimizer=optimizer,
+    optimizer_options=optimizer_options,
+)
+```
+
 """
 mutable struct ScalingProblem
 
@@ -107,6 +134,8 @@ mutable struct ScalingProblem
     starting_ps::Vector{Float64}
     errors_defined::Bool
     error_threshold::Vector{Float64}
+    optimizer::Optim.NelderMead
+    optimizer_options::Optim.Options
 
 
 
@@ -127,6 +156,8 @@ mutable struct ScalingProblem
         starting_ps,
         errors_defined,
         error_threshold,
+        optimizer,
+        optimizer_options,
     )
         return new(
             data,
@@ -145,6 +176,8 @@ mutable struct ScalingProblem
             starting_ps,
             errors_defined,
             error_threshold,
+            optimizer,
+            optimizer_options,
         )
     end
 
@@ -169,6 +202,18 @@ mutable struct ScalingProblem
         if !isa(error_threshold, Vector)
             error_threshold = error_threshold .* ones(n_parameters(sf))
         end
+        optimizer = get(
+            kwargs,
+            :optimizer,
+            NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1)),
+        )
+        optimizer isa Optim.NelderMead || throw(
+            ArgumentError("optimizer must be an Optim.NelderMead instance"),
+        )
+        optimizer_options = get(kwargs, :optimizer_options, Optim.Options())
+        optimizer_options isa Optim.Options || throw(
+            ArgumentError("optimizer_options must be an Optim.Options instance"),
+        )
 
         @assert length(p_space) == n_parameters(sf)
 
@@ -206,6 +251,8 @@ mutable struct ScalingProblem
             starting_ps,
             errors_defined,
             error_threshold,
+            optimizer,
+            optimizer_options,
         )
 
         # solve ScalingProblem

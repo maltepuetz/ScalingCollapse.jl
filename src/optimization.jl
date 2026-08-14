@@ -31,7 +31,8 @@ function parameter_scan!(sp)
         result = optimize(
             ps -> sp.quality_scan(sp, ps; check_bounds=true),
             l_ps,
-            NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
+            sp.optimizer,
+            sp.optimizer_options,
         )
         loc_minima[i] = result.minimum
         loc_optimal_ps[i] = result.minimizer
@@ -52,7 +53,8 @@ function optimize_starting_ps!(sp)
     result = optimize(
         ps -> sp.quality(sp, ps; check_bounds=true),
         sp.starting_ps,
-        NelderMead(; initial_simplex=Optim.AffineSimplexer(; b=0.1))
+        sp.optimizer,
+        sp.optimizer_options,
     )
 
     sp.minimum = result.minimum

@@ -11,5 +11,6 @@ using HDF5
     include("ising.jl")
     include("cdw.jl")
     include("scalingfunction.jl")
+    include("nelder_mead_configuration.jl")
     include("utilityfunctions.jl")
 end
