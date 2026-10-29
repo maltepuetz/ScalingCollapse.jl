@@ -34,6 +34,17 @@ close(file)
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.07)
 
+        # README example: the scan only finds minima at the nu = 1.5 edge of p_space, so
+        # the initial Nelder-Mead simplex must stay inside p_space to leave that edge
+        sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
+            sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
+            p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
+            dx=[-1.0, 1.0],
+        )
+        @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
+        @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
+        @test all(sp.optimal_ps_error .< 0.1)
+
 
         # create different input variants
         _Ts = zeros(size(binder))
