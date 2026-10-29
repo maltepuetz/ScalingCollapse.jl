@@ -72,6 +72,7 @@ function (sqf::SingleSpline)(sp, parameters; check_bounds=false)
 
     # filter for data points in interval
     mask = findall(x -> x < interval[2] && x > interval[1], xs)
+    isempty(mask) && return Inf
 
     if sp.errors_defined
         es = es .+ 1e-9  # add small number to avoid division by zero

@@ -18,9 +18,34 @@ function parameter_scan!(sp)
     p_combos = _parameter_combinations(sp.p_space)
     S_p_space = zeros(size(p_combos))
     for (i, ps) in enumerate(p_combos)
-        S_p_space[i] = sp.quality_scan(sp, ps; check_bounds=false)
+        S_p_space[i] = _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=false))
     end
+    all(isinf, S_p_space) && error(
+        "The quality function is infinite for every parameter combination in p_space. " *
+        "This usually means that the rescaled data of the different system sizes do not " *
+        "overlap within the optimization interval dx (or contain too few points there). " *
+        "Check p_space and dx, or provide starting_ps."
+    )
     loc_starting_ps = local_minima(S_p_space, p_combos)
+    if isempty(loc_starting_ps)
+        # without a strict local minimum, the global minimum is tied with a neighbor,
+        # i.e. the quality function is flat along some parameters
+        i_min = argmin(S_p_space)
+        flat_dims = [
+            d for d in 1:ndims(S_p_space)
+            if any(S_p_space[j] == S_p_space[i_min] && j[d] != i_min[d]
+                   for j in get_neighbors(i_min, size(S_p_space)))
+        ]
+        p_names = hasproperty(sp, :sf) ? scaled_p_names(sp.sf) :
+                  ["p$d" for d in 1:ndims(S_p_space)]
+        error(
+            "The parameter scan found no isolated minimum of the quality function: its " *
+            "smallest value $(S_p_space[i_min]) at $(p_combos[i_min]) is shared by " *
+            "neighboring grid points along $(join(p_names[flat_dims], ", ")). The data " *
+            "does not seem to constrain these parameters. Consider fixing them in the " *
+            "ScalingFunction, or adjust p_space or dx."
+        )
+    end
     sp.verbose && @info "Found $(length(loc_starting_ps)) local minima."
     sp.verbose && @info "Optimizing each starting point..."
 
@@ -29,7 +54,7 @@ function parameter_scan!(sp)
     loc_optimal_ps = Vector{Vector{Float64}}(undef, length(loc_starting_ps))
     for (i, l_ps) in enumerate(loc_starting_ps)
         result = optimize(
-            ps -> sp.quality_scan(sp, ps; check_bounds=true),
+            ps -> _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=true)),
             l_ps,
             sp.optimizer,
             sp.optimizer_options,
@@ -47,15 +72,36 @@ end
 
 function optimize_starting_ps!(sp)
 
-    sp.verbose && @info "Starting optimzation of provided startign parameters..."
+    sp.verbose && @info "Starting optimization of provided starting parameters..."
 
     # optimize starting parameters
     result = optimize(
-        ps -> sp.quality(sp, ps; check_bounds=true),
+        ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true)),
         sp.starting_ps,
         sp.optimizer,
         sp.optimizer_options,
     )
+
+    isfinite(result.minimum) || error(
+        "The optimization did not find any parameters with a finite quality. Starting " *
+        "from $(sp.starting_ps), the rescaled data of the different system sizes do not " *
+        "overlap within the optimization interval dx (or contain too few points there). " *
+        "Check starting_ps, p_space and dx."
+    )
+    if !Optim.converged(result) && sp.optimizer_options.show_warnings
+        hint = if Optim.iteration_limit_reached(result)
+            "Consider increasing the iteration limit via " *
+            "optimizer_options=Optim.Options(iterations=...)."
+        else
+            "This can happen if the initial simplex around the starting point " *
+            "$(sp.starting_ps) reaches outside of p_space. Consider widening p_space or " *
+            "using a smaller initial simplex, e.g. " *
+            "optimizer=Optim.NelderMead(initial_simplex=Optim.AffineSimplexer(b=0.01))."
+        end
+        @warn "The Nelder-Mead optimization stopped after " *
+              "$(Optim.iterations(result)) iterations without converging. The optimal " *
+              "parameters might be inaccurate. " * hint
+    end
 
     sp.minimum = result.minimum
     sp.optimal_ps = result.minimizer
@@ -67,6 +113,9 @@ end
 
 
 ##### Little Helper Functions #####
+# treat NaN values of the quality function as invalid parameters
+_nan_to_inf(S) = isnan(S) ? oftype(S, Inf) : S
+
 ### small helper function to span the parameter space
 # iterative function to generate all combinations of parameters
 function _parameter_combinations!(p_space, current_combination=Float64[], all_combinations=Vector{Float64}[])
