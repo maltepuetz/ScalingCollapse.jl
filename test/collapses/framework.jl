@@ -4,12 +4,14 @@ using Test
 using TOML
 
 """
-    CollapseCase(; name, kind, load, kwargs, exact, δabs, σmax, source)
+    CollapseCase(; name, kind, load, kwargs, exact, δabs, σmax, broken, source)
 
 One benchmark collapse. `kind` is `:exact` (compared with known exact values `exact`, keyed by
 free-parameter index) or `:regression` (compared with `references.toml`). `load()` returns
 `(xs, ys, es, Ls)` with `es === nothing` when there are no error bars; `kwargs` go to
-`ScalingProblem`.
+`ScalingProblem`. A `broken` case documents a known failure: its rows are reported with
+`@test_broken`, so it stays green while failing (a throw counts as failing) and is flagged as an
+error as soon as it passes.
 """
 Base.@kwdef struct CollapseCase
     name::String
@@ -19,6 +21,7 @@ Base.@kwdef struct CollapseCase
     exact::Dict{Int,Float64} = Dict{Int,Float64}()
     δabs::Dict{Int,Float64} = Dict{Int,Float64}()
     σmax::Dict{Int,Float64} = Dict{Int,Float64}()
+    broken::Bool = false
     source::String
 end
 
@@ -108,12 +111,19 @@ function print_rows(name, rows, label="")
     end
 end
 
-"Run `rows` through `@test`, printing the table when any row fails."
-function report_rows(name, rows, label="")
+"""
+Run `rows` through `@test` (`@test_broken` when `broken`), printing the table when any row of a
+non-broken case fails.
+"""
+function report_rows(name, rows, label="", broken=false)
     for r in rows
-        @test r.pass
+        if broken
+            @test_broken r.pass
+        else
+            @test r.pass
+        end
     end
-    all(r.pass for r in rows) || print_rows(name, rows, label)
+    broken || all(r.pass for r in rows) || print_rows(name, rows, label)
 end
 
 function run_cases(cases, refs)
@@ -122,14 +132,14 @@ function run_cases(cases, refs)
             try
                 sp = run_case(c)
                 if c.kind === :exact
-                    report_rows(c.name, check_exact(c, sp), "exact")
+                    report_rows(c.name, check_exact(c, sp), "exact", c.broken)
                 else
-                    report_rows(c.name, check_regression(c.name, sp, get(refs["last"], c.name, nothing)), "last")
+                    report_rows(c.name, check_regression(c.name, sp, get(refs["last"], c.name, nothing)), "last", c.broken)
                     haskey(refs["published"], c.name) &&
-                        report_rows(c.name, check_regression(c.name, sp, refs["published"][c.name]), "published")
+                        report_rows(c.name, check_regression(c.name, sp, refs["published"][c.name]), "published", c.broken)
                 end
             catch err
-                @test false
+                c.broken ? (@test_broken false) : (@test false)
                 @error "collapse case $(c.name) threw" exception = (err, catch_backtrace())
             end
         end

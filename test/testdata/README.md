@@ -6,6 +6,7 @@
 | `qubitloss/qubitloss_Ic.h5` | M. Pütz et al., "Flow to Nishimori universality in weakly monitored quantum circuits with qubit loss", [arXiv:2505.22720](https://arxiv.org/abs/2505.22720); data from [Zenodo, doi:10.5281/zenodo.15530142](https://doi.org/10.5281/zenodo.15530142) | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) | Raw `expect_ZZs` samples reduced to the coherent information `I_c` (mean ± standard error) per angle `theta`, system size `L` and parameter `r` with [`test/generators/qubitloss_reduce.jl`](../generators/qubitloss_reduce.jl) |
 | `exact/ising_strip.h5` | Exact correlation length ξ_L/L of the 2D Ising model on a periodic strip (Kaufman transfer-matrix spectrum), L = 8 to 64, 61 points of T ∈ [2.1, 2.45] | generated | [`test/generators/ising_strip.jl`](../generators/ising_strip.jl); layout `Ls`, `L{L}/{x, y}` |
 | `exact/curie_weiss.h5` | Exact finite-N Curie–Weiss Binder ratio and m_rms, N = 64 to 1024, 61 points of T ∈ [0.8, 1.2] | generated | [`test/generators/curie_weiss.jl`](../generators/curie_weiss.jl); layout `Ls`, `binder/L{N}/{x, y}`, `m_rms/L{N}/{x, y}` |
+| `synthetic/synthetic.h5` | Synthetic finite-size-scaling data with known parameters (x_c = 0.7, ν = 1.2, p3 = 0.3): nine variants (clean, noisy, uneven grid, corrections to scaling, ...), L = 16 to 128 | generated, seed `Xoshiro(20261029)` | [`test/generators/synthetic.jl`](../generators/synthetic.jl); layout `<variant>/Ls`, `<variant>/L{L}/{x, y[, e]}` |
 
 ## `qubitloss/qubitloss_Ic.h5` layout
 
