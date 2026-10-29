@@ -119,4 +119,43 @@ end
         @test callback_calls[] <= optimizer_options.iterations + 1
         @test all(isfinite, sp.starting_ps)
     end
+
+    @testset "initial simplex avoids non-finite quality" begin
+        # AffineSimplexer(a=0, b=0.25) puts the first vertex at 1.25 * 0.5 = 0.625, outside
+        # p_space; it is reflected to 0.375, which is inside p_space but has Inf quality, and
+        # must then be halved toward 0.5 (0.4375 is still Inf, 0.46875 is finite)
+        f(x) = x[1] < 0.45 ? Inf : sum(abs2, x .- [0.5, 1.4])
+        base = ScalingCollapse.Optim.AffineSimplexer(a=0.0, b=0.25)
+        @test !all([0.3, 1.2] .<= ScalingCollapse.Optim.simplexer(base, [0.5, 1.4])[2] .<= [0.6, 1.8])
+        S = ScalingCollapse.BoundedSimplexer(base, [0.3, 1.2], [0.6, 1.8], f)
+        simplex = ScalingCollapse.Optim.simplexer(S, [0.5, 1.4])
+        @test simplex[2] ≈ [0.46875, 1.4]
+        @test all(v -> isfinite(f(v)), simplex)
+        @test all(v -> all([0.3, 1.2] .<= v .<= [0.6, 1.8]), simplex)
+        @test length(unique(simplex)) == 3
+
+        # never finite away from the starting point: terminates, keeps vertices distinct
+        g(x) = x == [0.5, 1.4] ? 0.0 : Inf
+        S = ScalingCollapse.BoundedSimplexer(
+            ScalingCollapse.Optim.AffineSimplexer(a=0.025, b=0.1), [0.3, 1.2], [0.6, 1.8], g)
+        simplex = ScalingCollapse.Optim.simplexer(S, [0.5, 1.4])
+        @test length(unique(simplex)) == 3
+    end
+
+    @testset "parameter scan builds its simplex with quality_scan" begin
+        # the scan must shrink simplex vertices against quality_scan, never quality
+        sp = OptimizationConfigurationHarness(
+            false,
+            [[-1.0, -0.5, 0.0, 0.5, 1.0], [-1.0, -0.5, 0.0, 0.5, 1.0]],
+            (sp, ps; check_bounds) -> sum(abs2, ps),
+            (sp, ps; check_bounds) -> error("quality must not be evaluated during the scan"),
+            zeros(2),
+            Inf,
+            zeros(2),
+            ScalingCollapse.Optim.NelderMead(),
+            ScalingCollapse.Optim.Options(),
+        )
+        ScalingCollapse.parameter_scan!(sp)
+        @test all(abs.(sp.starting_ps) .< 1e-3)
+    end
 end
