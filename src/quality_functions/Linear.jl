@@ -67,17 +67,28 @@ function (::Linear)(sp, parameters; check_bounds=false)
     if sp.errors_defined
         for i in eachindex(xs)[2:end-1]
             # interpolate linearly
-            ybar = ((xs[i+1] - xs[i]) * ys[i-1] - (xs[i-1] - xs[i]) * ys[i+1]) / (xs[i+1] - xs[i-1])
-            expected_var = es[i]^2 + ((xs[i+1] - xs[i]) / (xs[i+1] - xs[i-1]))^2 * es[i-1]^2 + ((xs[i-1] - xs[i]) / (xs[i+1] - xs[i-1]))^2 * es[i+1]^2
+            w_l, w_r = interpolation_weights(xs, i)
+            ybar = w_l * ys[i-1] + w_r * ys[i+1]
+            expected_var = es[i]^2 + w_l^2 * es[i-1]^2 + w_r^2 * es[i+1]^2
             S += (ys[i] - ybar)^2 / expected_var
         end
     else
         for i in eachindex(xs)[2:end-1]
             # interpolate linearly
-            ybar = ((xs[i+1] - xs[i]) * ys[i-1] - (xs[i-1] - xs[i]) * ys[i+1]) / (xs[i+1] - xs[i-1])
+            w_l, w_r = interpolation_weights(xs, i)
+            ybar = w_l * ys[i-1] + w_r * ys[i+1]
             S += (ys[i] - ybar)^2
         end
     end
     S /= (length(xs) - 2)
     return S
+end
+
+# weights of the left and right neighbour for the linear interpolation at xs[i]; if both
+# neighbours coincide with xs[i] (e.g. several sizes share a scaled x value), the
+# interpolation is undefined (0/0) and we take their average instead
+function interpolation_weights(xs, i)
+    dx = xs[i+1] - xs[i-1]
+    dx == 0 && return 0.5, 0.5
+    return (xs[i+1] - xs[i]) / dx, (xs[i] - xs[i-1]) / dx
 end

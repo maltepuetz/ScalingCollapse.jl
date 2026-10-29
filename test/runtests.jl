@@ -16,4 +16,5 @@ using HDF5
     include("utilityfunctions.jl")
     include("collapses/framework_tests.jl")
     include("collapses/runcollapses.jl")
+    include("quality_functions.jl")
 end
