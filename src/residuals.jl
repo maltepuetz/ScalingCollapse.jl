@@ -66,14 +66,14 @@ function residuals(sp; kwargs...)  # p_space, N_steps=50, dims
                 sp.optimal_ps[i] - 3 * sp.optimal_ps_error[i],
                 sp.optimal_ps[i] + 3 * sp.optimal_ps_error[i],
                 length=N_steps
-            ) : range(sp.optimal_ps[i], sp.optimal_ps[i], length=1)
+            ) : _single_point_range(sp.optimal_ps[i])
             for i in 1:n_parameters(sp.sf)
         ]
     end
 
     # get adapted p_space
     adapted_p_space = [
-        i ∈ dims ? p_space[i] : sp.optimal_ps[i]:sp.optimal_ps[i]
+        i ∈ dims ? p_space[i] : _single_point_range(sp.optimal_ps[i])
         for i in 1:n_parameters(sp.sf)
     ]
 
@@ -88,3 +88,7 @@ function residuals(sp; kwargs...)  # p_space, N_steps=50, dims
 
     return p_space[dims], reshape(residuals, [size(residuals)[i] for i in sort(dims)]...)
 end
+
+# range containing only x; unlike x:x, this does not search for a rational approximation
+# of x, which can overflow (DivideError) on 32-bit systems
+_single_point_range(x) = StepRangeLen(Float64(x), 0.0, 1)
