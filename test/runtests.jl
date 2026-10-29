@@ -10,10 +10,11 @@ using HDF5
     include("data.jl")
     include("ising.jl")
     include("cdw.jl")
-    include("qubitloss.jl")
     include("scalingfunction.jl")
     include("nelder_mead_configuration.jl")
     include("error_handling.jl")
     include("utilityfunctions.jl")
+    include("collapses/framework_tests.jl")
+    include("collapses/runcollapses.jl")
     include("quality_functions.jl")
 end
