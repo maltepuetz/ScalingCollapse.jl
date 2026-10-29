@@ -1,0 +1,140 @@
+
+[last.cdw_holstein]
+minimum = 1.5814451310073512
+optimal_ps = [5.987147331237793]
+optimal_ps_error = [0.09354755556418888]
+
+[last.qubitloss_theta1]
+minimum = 0.6950853479131642
+optimal_ps = [0.3368140021187245, 1.5316127476622936]
+optimal_ps_error = [2.0883495456738702e-5, 0.004007166287844475]
+
+[last.qubitloss_theta10]
+minimum = 0.7442541852690072
+optimal_ps = [0.4265319312185789, 1.5230951589504307]
+optimal_ps_error = [5.0683343718710065e-5, 0.005675418399751589]
+
+[last.qubitloss_theta11]
+minimum = 0.6247618137672247
+optimal_ps = [0.4468498497774944, 1.5214711060612633]
+optimal_ps_error = [4.699964117930961e-5, 0.005069102879859283]
+
+[last.qubitloss_theta12]
+minimum = 0.5903772350277285
+optimal_ps = [0.46573427982187643, 1.512150822604576]
+optimal_ps_error = [4.535599775744346e-5, 0.004887784894829475]
+
+[last.qubitloss_theta13]
+minimum = 1.2117279209361937
+optimal_ps = [0.4820616587125075, 1.4885803319982682]
+optimal_ps_error = [6.352359359133582e-5, 0.006973110399468973]
+
+[last.qubitloss_theta14]
+minimum = 1.3443897053468052
+optimal_ps = [0.49431500982792426, 1.4205952717608374]
+optimal_ps_error = [6.555617373753253e-5, 0.00825869305812315]
+
+[last.qubitloss_theta15]
+minimum = 0.5176829887967557
+optimal_ps = [0.4999844497091177, 1.3370420766867954]
+optimal_ps_error = [4.332157921127173e-5, 0.005918989256081414]
+
+[last.qubitloss_theta2]
+minimum = 0.49518971829197317
+optimal_ps = [0.32642013223663524, 1.5349040262654619]
+optimal_ps_error = [3.029861985479878e-5, 0.004367057259930177]
+
+[last.qubitloss_theta3]
+minimum = 0.5815547477984481
+optimal_ps = [0.3238769041391557, 1.5320069766720137]
+optimal_ps_error = [3.3237173180349286e-5, 0.00478465999944159]
+
+[last.qubitloss_theta4]
+minimum = 0.6167646073968843
+optimal_ps = [0.3278240959924721, 1.5328424445653495]
+optimal_ps_error = [3.5630583172706275e-5, 0.005157282133396612]
+
+[last.qubitloss_theta5]
+minimum = 0.8451572078684797
+optimal_ps = [0.33702021544110117, 1.5324946071579832]
+optimal_ps_error = [4.366976087339586e-5, 0.005955423988883433]
+
+[last.qubitloss_theta6]
+minimum = 1.2195654205531916
+optimal_ps = [0.35037124065517794, 1.52983463349022]
+optimal_ps_error = [5.518390061326692e-5, 0.007476773462680572]
+
+[last.qubitloss_theta7]
+minimum = 1.110864701449783
+optimal_ps = [0.3668819796613271, 1.5286876488104044]
+optimal_ps_error = [5.535918698020952e-5, 0.0070834988526088235]
+
+[last.qubitloss_theta8]
+minimum = 0.9535184341730736
+optimal_ps = [0.3856451663938216, 1.5294591659810377]
+optimal_ps_error = [5.394005207432481e-5, 0.006572007931338784]
+
+[last.qubitloss_theta9]
+minimum = 0.7131431479258323
+optimal_ps = [0.40584514717995673, 1.5266710049696917]
+optimal_ps_error = [4.841437887700208e-5, 0.005679796564019159]
+
+[published.qubitloss_theta1]
+optimal_ps = [0.33681399873460816, 1.5316126320454644]
+optimal_ps_error = [2.0879977065466418e-5, 0.004006908264828457]
+
+[published.qubitloss_theta10]
+optimal_ps = [nan, 1.5231]
+optimal_ps_error = [nan, 0.0057]
+
+[published.qubitloss_theta11]
+optimal_ps = [nan, 1.5215]
+optimal_ps_error = [nan, 0.0051]
+
+[published.qubitloss_theta12]
+optimal_ps = [nan, 1.5122]
+optimal_ps_error = [nan, 0.0049]
+
+[published.qubitloss_theta13]
+optimal_ps = [nan, 1.4886]
+optimal_ps_error = [nan, 0.007]
+
+[published.qubitloss_theta14]
+optimal_ps = [nan, 1.4206]
+optimal_ps_error = [nan, 0.0083]
+
+[published.qubitloss_theta15]
+optimal_ps = [nan, 1.337]
+optimal_ps_error = [nan, 0.0059]
+
+[published.qubitloss_theta2]
+optimal_ps = [nan, 1.5349]
+optimal_ps_error = [nan, 0.0044]
+
+[published.qubitloss_theta3]
+optimal_ps = [nan, 1.532]
+optimal_ps_error = [nan, 0.0048]
+
+[published.qubitloss_theta4]
+optimal_ps = [nan, 1.5328]
+optimal_ps_error = [nan, 0.0052]
+
+[published.qubitloss_theta5]
+optimal_ps = [nan, 1.5325]
+optimal_ps_error = [nan, 0.006]
+
+[published.qubitloss_theta6]
+optimal_ps = [nan, 1.5298]
+optimal_ps_error = [nan, 0.0075]
+
+[published.qubitloss_theta7]
+optimal_ps = [nan, 1.5287]
+optimal_ps_error = [nan, 0.0071]
+
+[published.qubitloss_theta8]
+optimal_ps = [nan, 1.5295]
+optimal_ps_error = [nan, 0.0066]
+
+[published.qubitloss_theta9]
+optimal_ps = [nan, 1.5267]
+optimal_ps_error = [nan, 0.0057]
