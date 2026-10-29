@@ -12,7 +12,7 @@
 #
 # Exact values: p_c = 1/2, ν = 4/3, β = 5/36.
 #
-# Layout: `Ls`, `ps`, `<obs>/L{L}/{x, y, e}` for obs ∈ (spanning, strength); the attribute
+# Layout: `Ls`, `<obs>/L{L}/{x, y, e}` for obs ∈ (spanning, strength); the attribute
 # `nsamples` of `<obs>/L{L}` holds the number of samples.
 #
 # Usage (in an environment with HDF5):
@@ -23,7 +23,12 @@ using Random
 
 const SIZES = [16, 32, 64, 128, 256]
 const NSAMPLES = Dict(16 => 10_000, 32 => 10_000, 64 => 10_000, 128 => 10_000, 256 => 2_000)
-const PS = collect(0.45:0.001:0.55)
+const ZS = -2:0.05:2
+# p grid uniform in z = (p − 1/2)/(1/2)·L^{0.7}, so every size covers about the same window of
+# scaled x (z = 0 is p = 1/2 exactly). The exponent deliberately differs from 1/ν = 3/4: with
+# 3/4 the scaled x values of all sizes coincide at the true (p_c, ν), and interpolating quality
+# functions then become singular there (NaN on ties) and pin the fit to the exact values.
+points(L) = [0.5 * (1 + z * L^(-0.7)) for z in ZS]
 
 # bonds as (site, site) pairs; sites are 1:L² in row-major order, row 1 is the top row
 function bonds(L)
@@ -106,10 +111,11 @@ function simulate(rng, L, nsamples)
     parent, csize = zeros(Int, N), zeros(Int, N)
     top, bottom = falses(N), falses(N)
     largest = zeros(Int, M + 1)
-    weights = [binomial_weights(M, p) for p in PS]
+    ps = points(L)
+    weights = [binomial_weights(M, p) for p in ps]
     # running sums of the per-sample canonical values and their squares
-    s_span, s2_span = zeros(length(PS)), zeros(length(PS))
-    s_str, s2_str = zeros(length(PS)), zeros(length(PS))
+    s_span, s2_span = zeros(length(ps)), zeros(length(ps))
+    s_str, s2_str = zeros(length(ps)), zeros(length(ps))
     for _ in 1:nsamples
         nspan = sample!(largest, rng, L, bondlist, order, parent, csize, top, bottom)
         for (k, (ns, w)) in enumerate(weights)
@@ -132,7 +138,7 @@ end
 
 function write_percolation(path)
     rng = Random.Xoshiro(20261029)
-    k = findfirst(≈(0.5), PS)
+    k = findfirst(iszero, ZS)
     results = map(SIZES) do L
         t = @elapsed (span, span_e), (str, str_e) = simulate(rng, L, NSAMPLES[L])
         println("L = $L: $(NSAMPLES[L]) samples in $(round(t; digits=1)) s, ",
@@ -144,10 +150,9 @@ function write_percolation(path)
     mkpath(dirname(path))
     h5open(path, "w") do h
         h["Ls"] = SIZES
-        h["ps"] = PS
         for (L, r) in zip(SIZES, results), obs in (:spanning, :strength)
             y, e = r[obs]
-            h["$obs/L$L/x"] = PS
+            h["$obs/L$L/x"] = points(L)
             h["$obs/L$L/y"] = y
             h["$obs/L$L/e"] = e
             attrs(h["$obs/L$L"])["nsamples"] = NSAMPLES[L]
