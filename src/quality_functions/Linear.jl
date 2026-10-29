@@ -53,6 +53,9 @@ function (::Linear)(sp, parameters; check_bounds=false)
         end
     end
 
+    # the linear interpolation needs at least 3 data points in the interval
+    length(xs) < 3 && return Inf
+
     # sort data points
     perm = sortperm(xs)
     xs = xs[perm]

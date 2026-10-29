@@ -104,6 +104,12 @@ struct ScalingFunction
     free_idxs::Vector{Int}
 
     function ScalingFunction(f::Function, p_names::Vector{String}, x_scale::String, y_scale::String; kwargs...)
+        _check_kwargs(
+            "ScalingFunction",
+            keys(kwargs),
+            (SCALINGFUNCTION_KWARGS..., Symbol.(p_names)...);
+            hint="Parameters can be fixed by passing their name, one of $(p_names).",
+        )
         fixed_idxs = Tuple(filter(i -> haskey(kwargs, Symbol(p_names[i])), eachindex(p_names)))
         free_idxs = Tuple(setdiff(eachindex(p_names), fixed_idxs))
         fixed_vals = Tuple(Float64(kwargs[Symbol(p_names[i])]) for i in fixed_idxs)
@@ -117,6 +123,19 @@ struct ScalingFunction
             collect(free_idxs)
         )
     end
+end
+
+const SCALINGFUNCTION_KWARGS = (:f, :p_names, :x_scale, :y_scale, :N_parameters)
+
+# throw an ArgumentError listing the valid keywords if any keyword is unknown
+function _check_kwargs(caller, given, valid; hint="")
+    unknown = [k for k in given if k ∉ valid]
+    isempty(unknown) && return nothing
+    throw(ArgumentError(
+        "Unknown keyword argument$(length(unknown) > 1 ? "s" : "") " *
+        "$(join(unknown, ", ")) for $caller. " *
+        "Valid keyword arguments are: $(join(valid, ", ")). " * hint
+    ))
 end
 
 function specialize_wrapper(f::Function, fixed_idxs::NTuple{N1,Int}, free_idxs::NTuple{N2,Int}, fixed_vals::NTuple{N1,Float64}) where {N1,N2}
@@ -239,7 +258,10 @@ function ScalingFunction(p_names::Vector{String}; kwargs...)
     elseif length(p_names) == 3
         preset = :xy
     else
-        error("no preset supports %$(length(p_names)) parameters")
+        throw(ArgumentError(
+            "No preset supports $(length(p_names)) parameters (p_names = $(p_names)). " *
+            "Pass a custom scaling function, e.g. ScalingFunction(f; p_names=...)."
+        ))
     end
     ScalingFunction(preset, p_names=p_names; kwargs...)
 end

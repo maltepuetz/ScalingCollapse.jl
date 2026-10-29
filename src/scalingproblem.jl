@@ -23,6 +23,9 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
     much faster, but might not find the global minimum.
 - `error::Bool=true`: If `error=true`, the error analysis will be performed to give
     estimates of the uncertainties of the optimal parameters.
+- `error_threshold::Union{Float64,Vector{Float64}}=1.3`: The error of a parameter is the
+    largest deviation from its optimal value (with all other parameters fixed) at which
+    the quality function reaches `error_threshold` times its minimum. Must be larger than 1.
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
     initial simplex and adaptive or fixed algorithm parameters.
 - `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
@@ -57,14 +60,14 @@ using ScalingCollapse
 ```julia
 # (e.g. for ys == binder cumulant of Ising model)
 ScalingProblem(xs, ys, Ls;
-    sc=ScalingFunction(:x; p_names=["T_c", "nu"]),
+    sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
     dx=[-1.0, 1.0],
 )
 
 # or the same but with errors
 ScalingProblem(xs, ys, es, Ls;
-    sc=ScalingFunction(:x; p_names=["T_c", "nu"]),
+    sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
     dx=[-1.0, 1.0],
 )
@@ -74,7 +77,7 @@ ScalingProblem(xs, ys, es, Ls;
 ```julia
 # (e.g. for ys == magnetization of Ising model)
 ScalingProblem(xs, ys, Ls;
-    sc=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]),
+    sf=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]),
     dx=[-1.0, 1.0],
 )
 ```
@@ -83,7 +86,7 @@ ScalingProblem(xs, ys, Ls;
 ```julia
 # (e.g. for ys == susceptibility of Ising model)
 ScalingProblem(xs, ys, Ls;
-    sc=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
+    sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
     dx=[-1.0, 1.0],
 )
 ```
@@ -184,24 +187,67 @@ mutable struct ScalingProblem
     function ScalingProblem(args...; kwargs...)
 
         ##### unzip kwargs... #####
-        sf = get(kwargs, :sf, ScalingFunction(; kwargs...))
-        p_space = get(kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:n_parameters(sf)])
+        if haskey(kwargs, :sf)
+            _check_kwargs(
+                "ScalingProblem",
+                keys(kwargs),
+                SCALINGPROBLEM_KWARGS;
+                hint="Keyword arguments of the ScalingFunction (e.g. p_names or fixed " *
+                     "parameters) must be passed to ScalingFunction(...) when `sf` is given.",
+            )
+            sf = kwargs[:sf]
+        else
+            # remaining kwargs are passed to (and checked by) the ScalingFunction
+            sf_kwargs = (; (k => v for (k, v) in kwargs if k ∉ SCALINGPROBLEM_KWARGS)...)
+            sf = try
+                ScalingFunction(; sf_kwargs...)
+            catch e
+                e isa ArgumentError || rethrow()
+                throw(ArgumentError(
+                    "The keyword arguments $(join(keys(sf_kwargs), ", ")) are not " *
+                    "ScalingProblem keywords, so they were passed to the default " *
+                    "ScalingFunction, which rejected them: $(e.msg) " *
+                    "Valid ScalingProblem keyword arguments are: " *
+                    "$(join(SCALINGPROBLEM_KWARGS, ", "))."
+                ))
+            end
+        end
+        sf isa ScalingFunction || throw(ArgumentError(
+            "sf must be a ScalingFunction, got $(typeof(sf))."
+        ))
+        n_ps = n_parameters(sf)
+        p_space = get(kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:n_ps])
         dx = get(kwargs, :dx, [-Inf, Inf])
         verbose = get(kwargs, :verbose, false)
         error = get(kwargs, :error, true)
         skip_scan = false
-        starting_ps = get(kwargs, :starting_ps, zeros(n_parameters(sf)))
+        starting_ps = get(kwargs, :starting_ps, zeros(n_ps))
         if haskey(kwargs, :starting_ps)
+            length(starting_ps) == n_ps || throw(ArgumentError(
+                "starting_ps has $(length(starting_ps)) entries, but the scaling function " *
+                "has $(n_ps) free parameters $(scaled_p_names(sf))."
+            ))
             # if starting_ps are given, there will be no initial parameter space scan
-            p_space = [-1_000_000:1_000_000 for _ in 1:n_parameters(sf)]
+            p_space = [-1_000_000:1_000_000 for _ in 1:n_ps]
             skip_scan = true
         end
         quality_scan = get(kwargs, :quality_scan, MultipleSplines(scan_mode=true))
         quality = get(kwargs, :quality, Linear())
-        error_threshold = get(kwargs, :error_threshold, 1.3 .* ones(n_parameters(sf)))
+        error_threshold = get(kwargs, :error_threshold, 1.3 .* ones(n_ps))
         if !isa(error_threshold, Vector)
-            error_threshold = error_threshold .* ones(n_parameters(sf))
+            error_threshold = error_threshold .* ones(n_ps)
         end
+        length(error_threshold) == n_ps || throw(ArgumentError(
+            "error_threshold has $(length(error_threshold)) entries, but the scaling " *
+            "function has $(n_ps) free parameters $(scaled_p_names(sf))."
+        ))
+        all(>(1), error_threshold) || throw(ArgumentError(
+            "error_threshold must be larger than 1 (it is the factor by which the " *
+            "quality function may increase), got $(error_threshold)."
+        ))
+        (length(dx) == 2 && dx[1] < dx[2]) || throw(ArgumentError(
+            "dx must be an interval [x_min, x_max] with x_min < x_max, got $(dx)."
+        ))
         optimizer = get(
             kwargs,
             :optimizer,
@@ -215,10 +261,23 @@ mutable struct ScalingProblem
             ArgumentError("optimizer_options must be an Optim.Options instance"),
         )
 
-        @assert length(p_space) == n_parameters(sf)
+        length(p_space) == n_ps || throw(ArgumentError(
+            "p_space has $(length(p_space)) entries, but the scaling function has " *
+            "$(n_ps) free parameters $(scaled_p_names(sf))" *
+            (isempty(sf.fixed_idxs) ? "." : " (fixed: $(fixed_p_names(sf)))."
+            )
+        ))
+        all(!isempty, p_space) || throw(ArgumentError("p_space contains an empty range."))
+        for (p, r) in zip(scaled_p_names(sf), p_space)
+            (issorted(r) && allunique(r)) || throw(ArgumentError(
+                "p_space for $p must be strictly increasing, got $r."
+            ))
+        end
 
         # unzip args...
         data = unzip_data(args...)
+        _check_data(data, quality, quality_scan, skip_scan)
+        _check_scaling_function(sf, first(data), skip_scan ? starting_ps : first.(p_space))
 
         # check if errors are defined
         errors_defined = false
@@ -260,6 +319,73 @@ mutable struct ScalingProblem
         return sp
     end
 
+end
+
+
+const SCALINGPROBLEM_KWARGS = (
+    :sf,
+    :p_space,
+    :dx,
+    :verbose,
+    :error,
+    :starting_ps,
+    :quality_scan,
+    :quality,
+    :error_threshold,
+    :optimizer,
+    :optimizer_options,
+)
+
+function _check_data(data, quality, quality_scan, skip_scan)
+    length(data) >= 2 || throw(ArgumentError(
+        "A scaling collapse needs data for at least two system sizes, got $(length(data))."
+    ))
+    for d in data
+        for (name, vals) in (("x", d.xs), ("y", d.ys), ("error", d.es))
+            all(isfinite, vals) || throw(ArgumentError(
+                "The $name values for L = $(d.L) contain non-finite values (NaN or Inf)."
+            ))
+        end
+        # xs are sorted, so repeated values are adjacent
+        i = findfirst(i -> d.xs[i] == d.xs[i+1], 1:length(d.xs)-1)
+        isnothing(i) || throw(ArgumentError(
+            "The x value $(d.xs[i]) appears more than once for L = $(d.L). Every system " *
+            "size must have distinct x values; average or remove the duplicates."
+        ))
+    end
+
+    # splines of degree 3 need at least 4 data points per system size
+    uses_splines = quality isa MultipleSplines || (!skip_scan && quality_scan isa MultipleSplines)
+    if uses_splines
+        for d in data
+            length(d.xs) >= 4 || throw(ArgumentError(
+                "The MultipleSplines quality function needs at least 4 data points per " *
+                "system size, but L = $(d.L) has $(length(d.xs)). Use a different " *
+                "quality / quality_scan function or provide starting_ps to skip the scan."
+            ))
+        end
+    end
+    return nothing
+end
+
+# call the scaling function once to catch signature and return type mistakes early
+function _check_scaling_function(sf, d, ps)
+    signature = "f(d::ScalingCollapse.Data, $(join(sf.p_names, ", "))) -> ScalingCollapse.Data"
+    scaled = try
+        sf.f(d, Float64.(ps)...)
+    catch e
+        # other exceptions may be specific to these parameters and surface later
+        e isa MethodError || return nothing
+        throw(ArgumentError(
+            "Calling the scaling function failed with a MethodError. It must have the " *
+            "signature $signature. Original error: $(sprint(showerror, e))"
+        ))
+    end
+    scaled isa Data || throw(ArgumentError(
+        "The scaling function returned a $(typeof(scaled)), but it must return a " *
+        "ScalingCollapse.Data object: $signature."
+    ))
+    return nothing
 end
 
 
