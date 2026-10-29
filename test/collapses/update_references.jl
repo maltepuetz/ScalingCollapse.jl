@@ -1,6 +1,9 @@
 # Rewrites the [last] table of references.toml from the current code. Never touches [published].
-# Run from test/ in an environment with ScalingCollapse, HDF5 and TOML (e.g. via TestEnv.jl):
-#   julia --project=.. collapses/update_references.jl
+# Needs the test dependencies (HDF5, TOML), which the root project lacks. From the repo root, with
+# TestEnv.jl installed in the default environment:
+#   julia --project=. -e 'using TestEnv; TestEnv.activate(); include("test/collapses/update_references.jl")'
+# or in a temporary environment:
+#   julia -e 'using Pkg; Pkg.activate(; temp=true); Pkg.develop(path="."); Pkg.add(["HDF5", "TOML"]); include("test/collapses/update_references.jl")'
 include("framework.jl")
 for f in sort(filter(f -> startswith(f, "cases_") && endswith(f, ".jl"), readdir(@__DIR__)))
     include(joinpath(@__DIR__, f))

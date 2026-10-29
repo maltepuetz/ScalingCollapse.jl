@@ -2,7 +2,8 @@
 
 | File | Source | License | Transformation |
 |---|---|---|---|
-| `IsingMonteCarlo.h5` | 2D Ising model Monte Carlo data (Binder cumulant, magnetization, susceptibility). TODO: document the source. | | |
+| `IsingMonteCarlo.h5` | 2D Ising model Monte Carlo data on the square lattice, L = 8, 16, 32, 64, 81 temperatures T ∈ [1.5, 3.5]: Binder cumulant, ⟨M⟩, ⟨\|M\|⟩, ⟨M²⟩, susceptibility, energy and specific heat. Added by M. Pütz with the original test suite (commit `cf50abe`, 2023); its origin and simulation parameters were not recorded | none recorded | none; layout `Ts`, `Ls` and one 81 × 4 (T × L) matrix per observable |
+| `cdw_holstein.jl` | CDW structure factor of the square-lattice Holstein model, L = 4 to 12, transcribed from the demo of FiniteSizeScaling.jl: [owenpb.github.io/FiniteSizeScaling.jl/stable/demo_1](https://owenpb.github.io/FiniteSizeScaling.jl/stable/demo_1/) | none recorded (see the source) | none; Julia vectors `X_L{L}`, `Y_L{L}`, `E_L{L}` |
 | `qubitloss/qubitloss_Ic.h5` | M. Pütz et al., "Flow to Nishimori universality in weakly monitored quantum circuits with qubit loss", [arXiv:2505.22720](https://arxiv.org/abs/2505.22720); data from [Zenodo, doi:10.5281/zenodo.15530142](https://doi.org/10.5281/zenodo.15530142) | [CC-BY-4.0](https://creativecommons.org/licenses/by/4.0/) | Raw `expect_ZZs` samples reduced to the coherent information `I_c` (mean ± standard error) per angle `theta`, system size `L` and parameter `r` with [`test/generators/qubitloss_reduce.jl`](../generators/qubitloss_reduce.jl) |
 | `exact/ising_strip.h5` | Exact correlation length ξ_L/L of the 2D Ising model on a periodic strip (Kaufman transfer-matrix spectrum), L = 8 to 64, 61 points of T ∈ [2.1, 2.45] | generated | [`test/generators/ising_strip.jl`](../generators/ising_strip.jl); layout `Ls`, `L{L}/{x, y}` |
 | `exact/curie_weiss.h5` | Exact finite-N Curie–Weiss Binder ratio and m_rms, N = 64 to 1024, 61 points of T ∈ [0.8, 1.2] | generated | [`test/generators/curie_weiss.jl`](../generators/curie_weiss.jl); layout `Ls`, `binder/L{N}/{x, y}`, `m_rms/L{N}/{x, y}` |
@@ -18,3 +19,10 @@
 - `thetas`: 15 angles from 0 to π/2
 - `theta{i}/L{L}/r`, `Ic`, `Ic_err`, `nsamples`: one curve per angle index `i` and size `L`;
   `theta1` additionally contains `L512`
+
+## Transformations and generators
+
+All data are committed; nothing is downloaded at test time. The generators and converters in
+[`test/generators/`](../generators/) are not run by the tests. They need packages that are not
+test dependencies (e.g. JLD2, Measurements), so run them in a scratch environment. Generators that
+draw random numbers use the fixed seed `Xoshiro(20261029)`, so the committed files can be regenerated.
