@@ -24,7 +24,7 @@ given parameter space.
 # lets say our xs, ys and Ls are data for the susceptibility of the Ising model
 using ScalingCollapse
 sp = ScalingProblem(xs, ys, Ls;
-    sc=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
+    sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
     dx=[-1.0, 2.0],
 )
 
@@ -41,26 +41,35 @@ p_space, residuals = residuals(sp; dims=[1, 2])
 """
 function residuals(sp; kwargs...)  # p_space, N_steps=50, dims
 
-    # set parameter space
-    N_steps = get(kwargs, :N_steps, 51)
-    p_space = get(
-        kwargs,
-        :p_space,
-        [
-            range(
-                sp.optimal_ps[i] - 3 * sp.optimal_ps_error[i],
-                sp.optimal_ps[i] + 3 * sp.optimal_ps_error[i],
-                length=N_steps
-            ) for i in 1:n_parameters(sp.sf)
-        ]
-    )
-
     # get active dimensions
     dims = get(kwargs, :dims, [d for d in 1:n_parameters(sp.sf)]) |> sort
     N = length(dims)
     N == 0 && throw(ArgumentError("No active dimensions provided."))
     maximum(dims) > n_parameters(sp.sf) && throw(ArgumentError("Dimension out of bounds."))
     length(unique(dims)) != N && throw(ArgumentError("Duplicate dimensions provided."))
+
+    # set parameter space
+    N_steps = get(kwargs, :N_steps, 51)
+    p_space = get(kwargs, :p_space) do
+        # default: optimal parameters ± 3 errors, which requires valid errors
+        p_names = scaled_p_names(sp.sf)
+        for i in dims
+            e = sp.optimal_ps_error[i]
+            (isfinite(e) && e > 0.0) || throw(ArgumentError(
+                "Cannot construct the default p_space around the optimal parameters: " *
+                "the error of $(p_names[i]) is $e. Pass p_space explicitly, or solve " *
+                "the ScalingProblem with error=true."
+            ))
+        end
+        [
+            i in dims ? range(
+                sp.optimal_ps[i] - 3 * sp.optimal_ps_error[i],
+                sp.optimal_ps[i] + 3 * sp.optimal_ps_error[i],
+                length=N_steps
+            ) : range(sp.optimal_ps[i], sp.optimal_ps[i], length=1)
+            for i in 1:n_parameters(sp.sf)
+        ]
+    end
 
     # get adapted p_space
     adapted_p_space = [

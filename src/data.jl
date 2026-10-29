@@ -16,7 +16,10 @@ struct Data
     es::Vector{Float64}  # y error values
     function Data(L, xs, ys, es)
         # sort data by x values
-        @assert length(xs) == length(ys) == length(es)
+        length(xs) == length(ys) == length(es) || throw(ArgumentError(
+            "Data for L = $L has mismatched lengths: $(length(xs)) x values, " *
+            "$(length(ys)) y values and $(length(es)) error values."
+        ))
         perm = sortperm(xs)
         xsd = similar(xs)
         ysd = similar(ys)
@@ -49,12 +52,19 @@ function _unzip_data_aux(ys::Matrix, ordering_length::Int)
     (nrows == ncols) && (@warn "Data orientation is ambiguous, selecting column-first ordering")
     (ncols == ordering_length) && return eachcol(ys)
     (nrows == ordering_length) && return eachrow(ys)
-    error("Unable to determine data orientation")
+    throw(ArgumentError(
+        "Unable to determine data orientation: a $(nrows)×$(ncols) matrix matches " *
+        "neither the number of system sizes ($(ordering_length)) along its columns nor " *
+        "along its rows."
+    ))
 end
 
 function _unzip_data_aux(xs::Vector{Vector{T}}, ordering_length::Int) where {T}
     (length(xs) == ordering_length) && return (x for x in xs)
-    error("Expected input of length $(ordering_length), found $(length(xs)) instead")
+    throw(ArgumentError(
+        "Expected one vector per system size ($(ordering_length) in total), " *
+        "found $(length(xs)) instead."
+    ))
 end
 
 function _unzip_data_aux(xs::Vector{T}, ordering_length::Int) where {T}
@@ -82,4 +92,13 @@ function unzip_data(xs::Union{Vector,Matrix}, ys::Union{Vector,Matrix}, es::Unio
     ys_reordered = _unzip_data_aux(ys, Lcount)
     es_reordered = _unzip_data_aux(es, Lcount)
     _unzip_data(xs_reordered, ys_reordered, es_reordered, Ls)
+end
+
+function unzip_data(args...)
+    throw(ArgumentError(
+        "Unable to read the data from arguments of types " *
+        "($(join(typeof.(args), ", "))). Expected (xs, ys, Ls) or (xs, ys, es, Ls), " *
+        "where xs, ys and es are vectors, vectors of vectors or matrices, and Ls is a " *
+        "vector of integers. If your system sizes are floats, convert them with Int.(Ls)."
+    ))
 end

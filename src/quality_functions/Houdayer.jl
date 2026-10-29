@@ -56,6 +56,7 @@ function (::Houdayer)(sp, parameters; check_bounds=false)
             N += 1
         end
     end
+    N == 0 && return Inf
     S /= N
 
     return S
