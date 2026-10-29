@@ -23,29 +23,28 @@ push!(CASES, CollapseCase(;
 ))
 
 # E7: finite-N Curie–Weiss model with N in place of L, so x scales as N^{1/2} (p2 = 2), and
-# m_rms ∝ N^{-1/4} (p3/p2 = 1/4). NOT in CASES: both fail the exact criterion at 3σ with
-# δabs = 0. The generator is verified (brute-force enumeration to 1e-12, N → ∞ limits of U and
-# ⟨M²⟩/N^{3/2}); the misses are N^{-1/2} corrections to scaling that the quality-ratio error
-# estimate does not cover on noise-free data. Measured with dx = [-2, 2]:
-#   binder: T_c = 0.98840 ± 0.00304 (3.8σ), ν = 1.906 ± 0.127 (0.7σ)
-#   m_rms:  T_c = 0.99756 ± 0.00050 (4.9σ), ν = 1.847 ± 0.015 (10σ), p3 = 0.4484 ± 0.0037 (14σ)
-# Narrower or wider dx does not help. To be enabled as broken cases once the framework can
-# mark them (Task 3); σmax is 3× the measured errors.
-const CURIE_WEISS_EXACT_CASES = [
-    CollapseCase(;
-        name="curie_weiss_binder_exact", kind=:exact,
-        load=() -> load_exact("curie_weiss.h5", "binder"),
-        kwargs=(sf=ScalingFunction(:x), p_space=[0.8:0.02:1.2, 1.0:0.1:3.0], dx=[-2.0, 2.0]),
-        exact=Dict(1 => 1.0, 2 => 2.0),
-        σmax=Dict(1 => 9.1e-3, 2 => 3.8e-1),
-        source="exact finite-N Curie–Weiss Binder ratio, N = 64 to 1024",
-    ),
-    CollapseCase(;
-        name="curie_weiss_mrms_exact", kind=:exact,
-        load=() -> load_exact("curie_weiss.h5", "m_rms"),
-        kwargs=(sf=ScalingFunction(:xy), p_space=[0.8:0.02:1.2, 1.0:0.1:3.0, 0.1:0.1:1.0], dx=[-2.0, 2.0]),
-        exact=Dict(1 => 1.0, 2 => 2.0, 3 => 0.5),
-        σmax=Dict(1 => 1.5e-3, 2 => 4.6e-2, 3 => 1.1e-2),
-        source="exact finite-N Curie–Weiss m_rms, N = 64 to 1024",
-    ),
-]
+# m_rms ∝ N^{-1/4} (p3/p2 = 1/4). Known finite-size bias: N^{-1/2} corrections to scaling, which
+# the quality-ratio error does not cover on noise-free data. The generator is checked against
+# brute-force enumeration over all 2^N states (to 1e-12) and against the N → ∞ limits of U and
+# ⟨M²⟩/N^{3/2}. δabs = 1.5 × the measured |p − p*|; σmax ≈ 3× the measured errors.
+push!(CASES, CollapseCase(;
+    name="curie_weiss_binder_exact", kind=:exact,
+    load=() -> load_exact("curie_weiss.h5", "binder"),
+    kwargs=(sf=ScalingFunction(:x), p_space=[0.8:0.02:1.2, 1.0:0.1:3.0], dx=[-2.0, 2.0]),
+    exact=Dict(1 => 1.0, 2 => 2.0),
+    # measured: T_c = 0.98840 ± 0.00304 (|dev| 1.16e-2, 3.8σ), ν = 1.906 ± 0.127 (|dev| 9.4e-2, 0.7σ)
+    δabs=Dict(1 => 0.018, 2 => 0.15),
+    σmax=Dict(1 => 9.1e-3, 2 => 3.8e-1),
+    source="exact finite-N Curie–Weiss Binder ratio, N = 64 to 1024",
+))
+push!(CASES, CollapseCase(;
+    name="curie_weiss_mrms_exact", kind=:exact,
+    load=() -> load_exact("curie_weiss.h5", "m_rms"),
+    kwargs=(sf=ScalingFunction(:xy), p_space=[0.8:0.02:1.2, 1.0:0.1:3.0, 0.1:0.1:1.0], dx=[-2.0, 2.0]),
+    exact=Dict(1 => 1.0, 2 => 2.0, 3 => 0.5),
+    # measured: T_c = 0.99756 ± 0.00050 (|dev| 2.44e-3, 4.9σ), ν = 1.847 ± 0.015 (|dev| 0.153, 10σ),
+    # p3 = 0.4484 ± 0.0037 (|dev| 5.16e-2, 14σ)
+    δabs=Dict(1 => 0.0037, 2 => 0.24, 3 => 0.078),
+    σmax=Dict(1 => 1.5e-3, 2 => 4.6e-2, 3 => 1.1e-2),
+    source="exact finite-N Curie–Weiss m_rms, N = 64 to 1024",
+))

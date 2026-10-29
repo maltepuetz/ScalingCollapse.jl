@@ -34,10 +34,10 @@ push!(CASES, CollapseCase(;
 
 # R1: all 15 angles, regression against the published ν (and r_c for θ = 0)
 for i in 1:15
-    Ls = i == 1 ? [32, 64, 128, 256, 512] : [32, 64, 128, 256]
+    sizes = i == 1 ? [32, 64, 128, 256, 512] : [32, 64, 128, 256]
     push!(CASES, CollapseCase(;
         name="qubitloss_theta$i", kind=:regression,
-        load=() -> load_qubitloss(i, Ls),
+        load=() -> load_qubitloss(i, sizes),
         kwargs=QUBITLOSS_KWARGS,
         source="arXiv:2505.22720, Fig. 3, angle index $i",
     ))
