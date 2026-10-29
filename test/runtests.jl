@@ -15,4 +15,5 @@ using HDF5
     include("nelder_mead_configuration.jl")
     include("error_handling.jl")
     include("utilityfunctions.jl")
+    include("quality_functions.jl")
 end
