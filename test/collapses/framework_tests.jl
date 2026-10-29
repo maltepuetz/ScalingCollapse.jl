@@ -4,7 +4,7 @@ if !@isdefined(CollapseCase)
 end
 
 import Test: AbstractTestSet, record, finish
-# collects results without printing or throwing
+# collects results without printing or throwing (the top-level result is inspected via .results)
 struct NoThrowTestSet <: AbstractTestSet
     description::String
     results::Vector{Any}
@@ -12,7 +12,12 @@ struct NoThrowTestSet <: AbstractTestSet
 end
 record(ts::NoThrowTestSet, t) = (push!(ts.results, t); t)
 record(ts::NoThrowTestSet, t::Test.AbstractTestSet) = (append!(ts.results, t.results); t)
-finish(ts::NoThrowTestSet) = ts
+# nested testsets inherit this type, so hand their results up to an enclosing NoThrowTestSet
+function finish(ts::NoThrowTestSet)
+    parent = Test.get_testset_depth() > 0 ? Test.get_testset() : nothing
+    parent isa NoThrowTestSet && record(parent, ts)
+    return ts
+end
 
 @testset "Collapse benchmark framework" begin
     fake(ps, errs) = (optimal_ps=ps, optimal_ps_error=errs, minimum=1.0)
@@ -81,6 +86,21 @@ finish(ts::NoThrowTestSet) = ts
             report_rows("fake", passing, "exact", true)
         end
         @test length(ts.results) == 1 && ts.results[1] isa Test.Error
+        # mixed rows (one passing, one failing): a single Broken result, no Error/Fail
+        mixed = [passing[1], (; failing[1]..., param=2)]
+        ts = @testset NoThrowTestSet "mixed broken" begin
+            report_rows("fake", mixed, "exact", true)
+        end
+        @test length(ts.results) == 1 && ts.results[1] isa Test.Broken
+        # run_cases: broken regression case, last rows pass and published rows fail -> one Broken
+        refs = Dict{String,Any}("last" => Dict("fake" => Dict("optimal_ps" => [1.0], "optimal_ps_error" => [0.1])),
+            "published" => Dict("fake" => Dict("optimal_ps" => [5.0], "optimal_ps_error" => [0.1])))
+        bc = CollapseCase(; name="fake", kind=:regression, load=() -> ([[0.0, 1.0]], [[0.0, 1.0]], nothing, [1]),
+            kwargs=NamedTuple(), source="test", broken=true)
+        ts = @testset NoThrowTestSet "broken run_cases" begin
+            run_cases([bc], refs; runner=_ -> fake([1.0], [0.1]))
+        end
+        @test length(ts.results) == 1 && ts.results[1] isa Test.Broken
         ts = @testset NoThrowTestSet "failing not broken" begin
             redirect_stdout(devnull) do
                 report_rows("fake", failing, "exact", false)

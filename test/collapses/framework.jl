@@ -112,35 +112,44 @@ function print_rows(name, rows, label="")
 end
 
 """
-Run `rows` through `@test` (`@test_broken` when `broken`), printing the table when any row of a
-non-broken case fails.
+Run `rows` through `@test`, printing the table when any row fails. For a `broken` case all rows
+count as one `@test_broken` over their conjunction (so partly passing cases stay Broken), and no
+table is printed.
 """
 function report_rows(name, rows, label="", broken=false)
-    for r in rows
-        if broken
-            @test_broken r.pass
-        else
-            @test r.pass
-        end
+    if broken
+        @test_broken all(r.pass for r in rows)
+        return
     end
-    broken || all(r.pass for r in rows) || print_rows(name, rows, label)
+    for r in rows
+        @test r.pass
+    end
+    all(r.pass for r in rows) || print_rows(name, rows, label)
 end
 
-function run_cases(cases, refs)
+function run_cases(cases, refs; runner=run_case)
     for c in cases
         @testset "$(c.name)" begin
             try
-                sp = run_case(c)
+                sp = runner(c)
+                groups = Tuple{Vector{CheckRow},String}[]
                 if c.kind === :exact
-                    report_rows(c.name, check_exact(c, sp), "exact", c.broken)
+                    push!(groups, (check_exact(c, sp), "exact"))
                 else
-                    report_rows(c.name, check_regression(c.name, sp, get(refs["last"], c.name, nothing)), "last", c.broken)
+                    push!(groups, (check_regression(c.name, sp, get(refs["last"], c.name, nothing)), "last"))
                     haskey(refs["published"], c.name) &&
-                        report_rows(c.name, check_regression(c.name, sp, refs["published"][c.name]), "published", c.broken)
+                        push!(groups, (check_regression(c.name, sp, refs["published"][c.name]), "published"))
+                end
+                if c.broken  # one result over the rows of all groups
+                    report_rows(c.name, reduce(vcat, first.(groups)), "", true)
+                else
+                    for (rows, label) in groups
+                        report_rows(c.name, rows, label)
+                    end
                 end
             catch err
                 c.broken ? (@test_broken false) : (@test false)
-                @error "collapse case $(c.name) threw" exception = (err, catch_backtrace())
+                c.broken || @error "collapse case $(c.name) threw" exception = (err, catch_backtrace())
             end
         end
     end
