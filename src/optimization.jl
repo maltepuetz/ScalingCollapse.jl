@@ -56,7 +56,7 @@ function parameter_scan!(sp)
         result = optimize(
             ps -> _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=true)),
             l_ps,
-            sp.optimizer,
+            _bounded_optimizer(sp),
             sp.optimizer_options,
         )
         loc_minima[i] = result.minimum
@@ -78,7 +78,7 @@ function optimize_starting_ps!(sp)
     result = optimize(
         ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true)),
         sp.starting_ps,
-        sp.optimizer,
+        _bounded_optimizer(sp),
         sp.optimizer_options,
     )
 
@@ -113,6 +113,36 @@ end
 
 
 ##### Little Helper Functions #####
+### keep the initial Nelder-Mead simplex inside p_space
+# The quality functions return Inf outside p_space (check_bounds=true). If any vertex of the
+# initial simplex is Inf, Optim's Nelder-Mead reports a non-finite convergence measure and
+# stops at iteration 0 without moving. This wrapper moves such vertices back into p_space.
+struct BoundedSimplexer{S<:Optim.Simplexer} <: Optim.Simplexer
+    simplexer::S
+    lower::Vector{Float64}
+    upper::Vector{Float64}
+end
+
+function Optim.simplexer(S::BoundedSimplexer, initial_x)
+    simplex = Optim.simplexer(S.simplexer, initial_x)
+    for vertex in simplex, i in eachindex(vertex)
+        lo, hi = S.lower[i], S.upper[i]
+        lo <= vertex[i] <= hi && continue
+        # reflect the step through the starting point, clamp if it still leaves p_space
+        vertex[i] = clamp(2 * initial_x[i] - vertex[i], lo, hi)
+    end
+    return simplex
+end
+
+function _bounded_optimizer(sp)
+    lower = Float64[first(p) for p in sp.p_space]
+    upper = Float64[last(p) for p in sp.p_space]
+    return Optim.NelderMead(
+        BoundedSimplexer(sp.optimizer.initial_simplex, lower, upper),
+        sp.optimizer.parameters,
+    )
+end
+
 # treat NaN values of the quality function as invalid parameters
 _nan_to_inf(S) = isnan(S) ? oftype(S, Inf) : S
 
