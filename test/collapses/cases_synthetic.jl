@@ -2,8 +2,11 @@
 # y = L^{±p3/p2} F((x − x_c)/x_c L^{1/p2}) (1 + c L^{−ω}) + noise with x_c = 0.7, ν = 1.2, p3 = 0.3,
 # run with every quality function. Exact cases have δabs = 0 (the data have no finite-size bias);
 # σmax is 3× the measured fit error, rounded to 2 significant digits. `corrections` (c = 0.5,
-# ω = 1) is biased by construction, so it is a regression case plus an exact `_sanity` case with
-# δabs = 0.05·|p*|.
+# ω = 1) is biased by construction, so it is a regression case plus an exact `_sanity` case. The
+# sanity cases need no δabs: the largest measured deviations are p3 = 0.31353 ± 0.00651 (2.1σ,
+# Linear) and 0.31497 ± 0.00572 (2.6σ, MultipleSplines); all others are below 2σ.
+# SingleSpline fits a single spline to all sizes, so its minimum is broad: its σ on ν is
+# 0.04 to 0.16 and the fitted ν lies up to 1.7σ above the truth, which makes its exact checks weak.
 using HDF5
 
 function load_synthetic(variant)
@@ -91,9 +94,7 @@ for (variant, (preset, truth)) in SYNTHETIC_VARIANTS, (qname, quality) in SYNTHE
     exact = Dict(i => p for (i, p) in enumerate(truth))
     if variant == "corrections"
         push!(CASES, CollapseCase(; name, kind=:regression, load, kwargs, source))
-        # measured bias of the fit by construction (c = 0.5, ω = 1); sanity bound 5% of the true value
-        push!(CASES, CollapseCase(; name=name * "_sanity", kind=:exact, load, kwargs, exact, σmax,
-            δabs=Dict(i => 0.05 * abs(p) for (i, p) in exact), source))
+        push!(CASES, CollapseCase(; name=name * "_sanity", kind=:exact, load, kwargs, exact, σmax, source))
     else
         push!(CASES, CollapseCase(; name, kind=:exact, load, kwargs, exact, σmax, source))
     end

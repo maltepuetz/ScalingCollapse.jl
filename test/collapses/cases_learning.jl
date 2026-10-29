@@ -37,7 +37,7 @@ push!(CASES, CollapseCase(;
     load=() -> load_learning_ising_vertical(16),
     kwargs=LEARNING_ISING_VERTICAL_KWARGS,
     exact=Dict(1 => 1.0, 2 => 1.0),
-    # published fit 1.00058(16) is 3.6σ from 1; small-size bias
+    # published fit 1.00058(16) is 3.6σ from 1 (measured |x_c − 1| = 5.75e-4); small-size bias
     δabs=Dict(1 => 1e-3),
     # measured: x_c = 1.000575 ± 0.000161, ν = 0.9981 ± 0.0048
     σmax=Dict(1 => 4.9e-4, 2 => 1.5e-2),
@@ -85,7 +85,7 @@ end
 
 # R5: 40 horizontal and 30 vertical Potts cuts
 for bi in 1:40
-    # b40 has no [published] entry: stored fit (v0.2.5 + Optim 1.13.3) was hit by the Optim ≥ 1.12
+    # b40: no [published] entry, the stored fit (v0.2.5 + Optim 1.13.3) was hit by the Optim ≥ 1.12
     # simplex bug: quality 2.032 vs 1.866 at the true minimum; γ_c differs by 1.19σ. Checked
     # against [last] only.
     push!(CASES, CollapseCase(;

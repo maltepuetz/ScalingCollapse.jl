@@ -26,14 +26,16 @@ push!(CASES, CollapseCase(;
 # m_rms ∝ N^{-1/4} (p3/p2 = 1/4). Known finite-size bias: N^{-1/2} corrections to scaling, which
 # the quality-ratio error does not cover on noise-free data. The generator is checked against
 # brute-force enumeration over all 2^N states (to 1e-12) and against the N → ∞ limits of U and
-# ⟨M²⟩/N^{3/2}. δabs = 1.5 × the measured |p − p*|; σmax ≈ 3× the measured errors.
+# ⟨M²⟩/N^{3/2}. δabs = 1.5 × the measured |p − p*| on the parameters that fail at 3σ, 0 on the
+# others; σmax ≈ 3× the measured errors.
 push!(CASES, CollapseCase(;
     name="curie_weiss_binder_exact", kind=:exact,
     load=() -> load_exact("curie_weiss.h5", "binder"),
     kwargs=(sf=ScalingFunction(:x), p_space=[0.8:0.02:1.2, 1.0:0.1:3.0], dx=[-2.0, 2.0]),
     exact=Dict(1 => 1.0, 2 => 2.0),
-    # measured: T_c = 0.98840 ± 0.00304 (|dev| 1.16e-2, 3.8σ), ν = 1.906 ± 0.127 (|dev| 9.4e-2, 0.7σ)
-    δabs=Dict(1 => 0.018, 2 => 0.15),
+    # measured: T_c = 0.98840 ± 0.00304 (|dev| 1.16e-2, 3.8σ), ν = 1.906 ± 0.127 (|dev| 9.4e-2,
+    # 0.7σ, so no δabs)
+    δabs=Dict(1 => 0.018),
     σmax=Dict(1 => 9.1e-3, 2 => 3.8e-1),
     source="exact finite-N Curie–Weiss Binder ratio, N = 64 to 1024",
 ))
