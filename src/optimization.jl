@@ -52,13 +52,9 @@ function parameter_scan!(sp)
     # optimize each starting point
     loc_minima = zeros(length(loc_starting_ps))
     loc_optimal_ps = Vector{Vector{Float64}}(undef, length(loc_starting_ps))
+    f = ps -> _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=true))
     for (i, l_ps) in enumerate(loc_starting_ps)
-        result = optimize(
-            ps -> _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=true)),
-            l_ps,
-            _bounded_optimizer(sp),
-            sp.optimizer_options,
-        )
+        result = optimize(f, l_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
         loc_minima[i] = result.minimum
         loc_optimal_ps[i] = result.minimizer
     end
@@ -75,12 +71,8 @@ function optimize_starting_ps!(sp)
     sp.verbose && @info "Starting optimization of provided starting parameters..."
 
     # optimize starting parameters
-    result = optimize(
-        ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true)),
-        sp.starting_ps,
-        _bounded_optimizer(sp),
-        sp.optimizer_options,
-    )
+    f = ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true))
+    result = optimize(f, sp.starting_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
 
     isfinite(result.minimum) || error(
         "The optimization did not find any parameters with a finite quality. Starting " *
@@ -94,7 +86,8 @@ function optimize_starting_ps!(sp)
             "optimizer_options=Optim.Options(iterations=...)."
         else
             "This can happen if the initial simplex around the starting point " *
-            "$(sp.starting_ps) reaches outside of p_space. Consider widening p_space or " *
+            "$(sp.starting_ps) has vertices where the quality function is not finite (e.g. " *
+            "no overlap of the rescaled data within dx). Consider widening p_space or " *
             "using a smaller initial simplex, e.g. " *
             "optimizer=Optim.NelderMead(initial_simplex=Optim.AffineSimplexer(b=0.01))."
         end
@@ -113,14 +106,19 @@ end
 
 
 ##### Little Helper Functions #####
-### keep the initial Nelder-Mead simplex inside p_space
-# The quality functions return Inf outside p_space (check_bounds=true). If any vertex of the
-# initial simplex is Inf, Optim's Nelder-Mead reports a non-finite convergence measure and
-# stops at iteration 0 without moving. This wrapper moves such vertices back into p_space.
-struct BoundedSimplexer{S<:Optim.Simplexer} <: Optim.Simplexer
+### keep the initial Nelder-Mead simplex at finite quality values
+# The quality functions return Inf outside p_space (check_bounds=true), but also inside p_space
+# when the rescaled data do not overlap within dx. If any vertex of the initial simplex is Inf,
+# Optim's Nelder-Mead (>= 1.12) reports a non-finite convergence measure and stops at iteration
+# 0 without moving. This wrapper moves such vertices back into p_space and then towards the
+# starting point until the quality function f is finite there.
+const _MAX_SIMPLEX_HALVINGS = 20
+
+struct BoundedSimplexer{S<:Optim.Simplexer,F} <: Optim.Simplexer
     simplexer::S
     lower::Vector{Float64}
     upper::Vector{Float64}
+    f::F
 end
 
 function Optim.simplexer(S::BoundedSimplexer, initial_x)
@@ -131,14 +129,23 @@ function Optim.simplexer(S::BoundedSimplexer, initial_x)
         # reflect the step through the starting point, clamp if it still leaves p_space
         vertex[i] = clamp(2 * initial_x[i] - vertex[i], lo, hi)
     end
+    for vertex in simplex
+        vertex == initial_x && continue
+        # halve the step from the starting point until the quality is finite
+        n = 0
+        while !isfinite(S.f(vertex)) && n < _MAX_SIMPLEX_HALVINGS
+            vertex .= initial_x .+ (vertex .- initial_x) ./ 2
+            n += 1
+        end
+    end
     return simplex
 end
 
-function _bounded_optimizer(sp)
+function _bounded_optimizer(sp, f)
     lower = Float64[first(p) for p in sp.p_space]
     upper = Float64[last(p) for p in sp.p_space]
     return Optim.NelderMead(
-        BoundedSimplexer(sp.optimizer.initial_simplex, lower, upper),
+        BoundedSimplexer(sp.optimizer.initial_simplex, lower, upper, f),
         sp.optimizer.parameters,
     )
 end

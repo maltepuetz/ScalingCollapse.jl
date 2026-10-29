@@ -119,4 +119,23 @@ end
         @test callback_calls[] <= optimizer_options.iterations + 1
         @test all(isfinite, sp.starting_ps)
     end
+
+    @testset "initial simplex avoids non-finite quality" begin
+        # the AffineSimplexer vertex 0.6125 leaves p_space and is reflected to 0.3875, which is
+        # inside p_space but has Inf quality -> must be halved toward 0.5
+        f(x) = x[1] < 0.45 ? Inf : sum(abs2, x .- [0.5, 1.4])
+        S = ScalingCollapse.BoundedSimplexer(
+            ScalingCollapse.Optim.AffineSimplexer(a=0.025, b=0.1), [0.3, 1.2], [0.6, 1.8], f)
+        simplex = ScalingCollapse.Optim.simplexer(S, [0.5, 1.4])
+        @test all(v -> isfinite(f(v)), simplex)
+        @test all(v -> all([0.3, 1.2] .<= v .<= [0.6, 1.8]), simplex)
+        @test length(unique(simplex)) == 3
+
+        # never finite away from the starting point: terminates, keeps vertices distinct
+        g(x) = x == [0.5, 1.4] ? 0.0 : Inf
+        S = ScalingCollapse.BoundedSimplexer(
+            ScalingCollapse.Optim.AffineSimplexer(a=0.025, b=0.1), [0.3, 1.2], [0.6, 1.8], g)
+        simplex = ScalingCollapse.Optim.simplexer(S, [0.5, 1.4])
+        @test length(unique(simplex)) == 3
+    end
 end
