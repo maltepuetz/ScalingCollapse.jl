@@ -151,6 +151,15 @@ end
             @test all(sp.optimal_ps_error .>= sqrt(0.3) * (1 - 1e-3))
         end
 
+        @testset "tiny conditional root" begin
+            # a very steep valley (as for a minimum on a jump of the quality): the conditional
+            # roots are ≈ 5e-13, which 60 outward steps of ×1.5 alone cannot carry to the
+            # profile crossing; the profile 1 + a²K/(K+1) (same for b) crosses 1.3 at ≈ √0.3
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) ->
+                1 + 1e24 * (ps[1] - ps[2])^2 + ps[2]^2)
+            @test errors!(sp) ≈ fill(sqrt(0.3), 2) rtol = 1e-3
+        end
+
         @testset "optimum at zero" begin
             sp = ErrorHarness(quality=(sp, ps; check_bounds=false) -> 1 + sum(abs2, ps))
             @test errors!(sp) ≈ fill(sqrt(0.3), 2) rtol = 1e-3
@@ -230,6 +239,7 @@ end
                 max_restarts=0)
             @test all(isnan, sp.optimal_ps_error)
             @test sp.minimum < 1.0036
+            @test sp.minimum == valley(sp, sp.optimal_ps)
             @test all(j -> first(sp.p_space[j]) <= sp.optimal_ps[j] <= last(sp.p_space[j]),
                 eachindex(sp.optimal_ps))
         end

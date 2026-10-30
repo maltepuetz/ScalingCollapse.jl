@@ -18,6 +18,7 @@ const _PROFILE_PRECISION = 1e-3         # relative bisection precision
 const _PROFILE_MAX_STEPS = 60           # outward bracket steps per side
 const _PROFILE_MAX_BISECTIONS = 100
 const _PROFILE_LOWER_TOLERANCE = 1e-6   # relative; a lower quality means a better fit exists
+const _PROFILE_MIN_START = 1e-6         # relative floor of the first outward bracket step
 
 # bookkeeping of the profile evaluations of one parameter
 mutable struct _ProfileRecord
@@ -29,8 +30,10 @@ mutable struct _ProfileRecord
 end
 _ProfileRecord(sp) = _ProfileRecord(0, sp.minimum, copy(sp.optimal_ps), false, [])
 
-# whether q is lower than the minimum by more than the tolerance
-_is_lower(sp, q) = q < sp.minimum * (1.0 - _PROFILE_LOWER_TOLERANCE)
+# whether q is lower than the minimum by more than the tolerance: relative, but never below
+# the absolute accuracy at which Nelder-Mead stops (g_abstol), so optimizer noise is ignored
+_is_lower(sp, q) = q < sp.minimum -
+    max(_PROFILE_LOWER_TOLERANCE * sp.minimum, sp.optimizer_options.g_abstol)
 
 # whether a profile evaluation found a better fit inside p_space
 _found_lower(sp, record::_ProfileRecord) = _is_lower(sp, record.lowest_q)
@@ -75,7 +78,7 @@ function _profile_errors!(sp; max_restarts::Int=3)
         old_minimum = sp.minimum
         if max_restarts > 0
             # re-optimize from the better point and redo the analysis from scratch
-            _reoptimize!(sp, lower.lowest_ps)
+            _reoptimize!(sp, lower.lowest_ps, lower.lowest_q)
             @warn "The error analysis found a lower quality than the minimum: the fit is " *
                   "re-optimized, which moves the minimum from $(old_minimum) to " *
                   "$(sp.minimum) (optimal parameters $(sp.optimal_ps)), and the error " *
@@ -96,14 +99,18 @@ function _profile_errors!(sp; max_restarts::Int=3)
     return nothing
 end
 
-# final optimization started from ps; sp.starting_ps keeps its value
-function _reoptimize!(sp, ps)
+# final optimization started from ps (with quality q); sp.starting_ps keeps its value. The
+# result is never worse than ps itself.
+function _reoptimize!(sp, ps, q)
     starting_ps = sp.starting_ps
     sp.starting_ps = ps
     try
         optimize_starting_ps!(sp)
     finally
         sp.starting_ps = starting_ps
+    end
+    if sp.minimum > q
+        sp.optimal_ps, sp.minimum = copy(ps), q
     end
     return nothing
 end
@@ -183,9 +190,11 @@ function _profile_side(sp, i::Int, d::Float64, f0::Float64;
         return q / sp.minimum - threshold
     end
 
-    # bracket outward from the conditional root; lo stays a valid point below threshold, hi is
-    # a valid point at or above threshold (hi_valid) or an invalid point
-    lo, x = 0.0, d
+    # bracket outward from the conditional root (at least a small step relative to the
+    # parameter, e.g. when the minimum sits on a jump of the quality); lo stays a valid point
+    # below threshold, hi is a valid point at or above threshold (hi_valid) or an invalid point
+    lo = 0.0
+    x = copysign(max(abs(d), _PROFILE_MIN_START * max(abs(sp.optimal_ps[i]), 1.0)), d)
     hi, hi_valid = NaN, false
     for _ in 1:_PROFILE_MAX_STEPS
         fx = f(x)
