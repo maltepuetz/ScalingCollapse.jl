@@ -39,8 +39,8 @@ push!(CASES, CollapseCase(;
     exact=Dict(1 => 1.0, 2 => 1.0),
     # published fit 1.00058(16) is 3.6σ from 1 (measured |x_c − 1| = 5.75e-4); small-size bias
     δabs=Dict(1 => 1e-3),
-    # measured: x_c = 1.000575 ± 0.000161, ν = 0.9981 ± 0.0048
-    σmax=Dict(1 => 4.9e-4, 2 => 1.5e-2),
+    # measured: x_c = 1.000575 ± 0.000340 (1.7σ), ν = 0.9981 ± 0.0079 (0.2σ)
+    σmax=Dict(1 => 1.0e-3, 2 => 2.4e-2),
     source="arXiv:2504.12385, vertical cut γ = 0.3 (index 16), L = ds[2:5]",
 ))
 
@@ -97,6 +97,10 @@ for bi in 1:40
     ))
 end
 for gi in 1:30
+    # g28: no [published] entry. In the profile error analysis a lower quality was found: 2.021
+    # vs 2.646 at the published optimum, so the published fit was not optimal (this does not
+    # show that the new fit is the global minimum). The re-optimized fit moves by 0.92σ, -0.62σ
+    # and 0.85σ (published σ) in x_c, ν and p3. Checked against [last] only.
     push!(CASES, CollapseCase(;
         name="learning_potts_vertical_g$gi", kind=:regression,
         load=() -> load_learning_curves("learning_potts/vertical.h5", "g$gi"),

@@ -31,27 +31,42 @@ push!(CASES, CollapseCase(;
     load=() -> load_percolation_h5("spanning"),
     kwargs=(sf=ScalingFunction(:x), p_space=[0.48:0.002:0.52, 0.8:0.1:2.0], dx=[-1.0, 1.0]),
     exact=Dict(1 => 0.5, 2 => 4 / 3),
-    # measured: p_c = 0.500687 ± 0.000354 (1.9σ), ν = 1.3171 ± 0.0384 (0.4σ)
+    # measured: p_c = 0.500687 ± 0.000370 (1.9σ), ν = 1.3171 ± 0.0405 (0.4σ)
     σmax=Dict(1 => 1.1e-3, 2 => 0.12),
     source="Newman–Ziff bond percolation, top-bottom spanning probability, L = 16 to 256",
 ))
 
 const BOND_STRENGTH_KWARGS = (sf=ScalingFunction(:xy),
     p_space=[0.48:0.002:0.52, 0.8:0.1:2.0, 0.05:0.025:0.3], dx=[-1.0, 1.0])
-# Known failure (broken): β swings across size sets in lockstep with p_c, by many σ and not
-# monotonically: L = 16–256 gives p_c = 0.499745 ± 0.000109, β = 0.1545 ± 0.0031 (5.0σ);
-# L = 32–256 gives p_c = 0.499039, β = 0.1772 ± 0.0037 (10σ); L = 64–256 gives p_c = 0.500301,
-# β = 0.1267 ± 0.0012 (10σ). The per-parameter error, computed with the other parameters held
-# fixed, ignores the strong p_c–β correlation, so σ is too small; open-boundary surface
-# corrections to the largest-cluster fraction may contribute. ν = 1.2842 ± 0.0131 (3.8σ).
-# δabs = 0; the regression twin `bond_strength` tracks the fit.
+# Fits only L = 64 to 256. Size windows with profile errors (fit ± σ, |p − p*|/σ, quality):
+#
+#   | sizes  | p_c (0.5)                | ν (4/3)              | β (5/36)                | quality |
+#   |--------|--------------------------|----------------------|-------------------------|---------|
+#   | 16–256 | 0.49975 ± 0.00048        | 1.284 ± 0.015 (3.2σ) | 0.1545 ± 0.0122 (1.3σ)  | 2.13    |
+#   | 32–256 | 0.49904 ± 0.00056        | 1.272 ± 0.018 (3.4σ) | 0.177 ± 0.016 (2.4σ)    | 1.40    |
+#   | 64–256 | 0.50030 ± 0.00020 (1.5σ) | 1.317 ± 0.010 (1.6σ) | 0.1267 ± 0.0076 (1.6σ)  | 0.07    |
+#
+# The earlier β miss on 16–256 was the conditional error ignoring the p_c–β correlation (σ(β) 4×
+# too small). The ν miss is corrections to scaling at L = 16–32 (open-boundary largest-cluster
+# fraction): the quality of ~2 shows that the curves do not collapse within their error bars
+# there. The spanning probability from the same samples has smaller corrections. Caveat: the 81
+# points of one curve come from the same samples and are strongly correlated, which the quality
+# treats as independent (hence quality ≪ 1 on 64–256). δabs = 0; the regression twin
+# `bond_strength` keeps L = 16 to 256.
+# measured: p_c = 0.500301 ± 0.000202 (1.5σ), ν = 1.3173 ± 0.0102 (1.6σ),
+# β = 0.1267 ± 0.0076 (1.6σ), quality 0.066; σmax ≈ 3× these errors.
+function load_bond_strength_64()
+    xs, ys, es, Ls = load_percolation_h5("strength")
+    i = findfirst(==(64), Ls)
+    return xs[i:end], ys[i:end], es[i:end], Ls[i:end]
+end
 push!(CASES, CollapseCase(;
-    name="bond_strength_exact", kind=:exact, broken=true,
-    load=() -> load_percolation_h5("strength"),
+    name="bond_strength_exact", kind=:exact,
+    load=load_bond_strength_64,
     kwargs=BOND_STRENGTH_KWARGS,
     exact=Dict(1 => 0.5, 2 => 4 / 3, 3 => 5 / 36),
-    σmax=Dict(1 => 3.3e-4, 2 => 0.040, 3 => 9.4e-3),
-    source="Newman–Ziff bond percolation, largest-cluster fraction, L = 16 to 256",
+    σmax=Dict(1 => 6.1e-4, 2 => 0.031, 3 => 0.023),
+    source="Newman–Ziff bond percolation, largest-cluster fraction, L = 64 to 256",
 ))
 push!(CASES, CollapseCase(;
     name="bond_strength", kind=:regression,
@@ -73,9 +88,10 @@ push!(CASES, CollapseCase(;
     # Known finite-size bias: corrections to scaling at L = 128 to 512 shift p_c below the exact
     # value for every quality function (Linear, Houdayer and MultipleSplines give 0.59261 to
     # 0.59267) and for autoScale itself. δabs = 1.5 × the measured |p − p*| on the parameters
-    # that fail at 3σ. Measured: p_c = 0.5926105 ± 0.0000258 (|dev| 1.36e-4, 5.3σ),
-    # ν = 1.3267 ± 0.0042 (1.6σ), β = 0.14078 ± 0.00056 (|dev| 1.89e-3, 3.4σ)
+    # that failed at 3σ with the conditional errors (p_c 5.3σ, β 3.4σ); kept with profile
+    # errors. Measured: p_c = 0.5926105 ± 0.0000760 (|dev| 1.36e-4, 1.8σ),
+    # ν = 1.3267 ± 0.0077 (0.9σ), β = 0.14078 ± 0.00130 (|dev| 1.89e-3, 1.5σ)
     δabs=Dict(1 => 2.1e-4, 3 => 2.9e-3),
-    σmax=Dict(1 => 7.8e-5, 2 => 0.013, 3 => 1.7e-3),
+    σmax=Dict(1 => 2.3e-4, 2 => 0.023, 3 => 3.9e-3),
     source="autoScale.py example data (O. Melchert, MIT): 2D site percolation order parameter, L = 128 to 512",
 ))
