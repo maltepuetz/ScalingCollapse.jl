@@ -21,11 +21,29 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `starting_ps::Vector{Float64}`: If `starting_ps` are given, there will be no initial
     parameter space scan. Instead, the optimization will start at the given points. This is
     much faster, but might not find the global minimum.
-- `error::Union{Bool,Symbol}=true`: `true`/`:profile` (default), `:conditional`, or
-    `false` (no error analysis)
+- `error::Union{Bool,Symbol}=true`: error analysis method. `true`/`:profile` (default),
+    `:conditional`, or `false` (no error analysis); anything else throws an `ArgumentError`.
+    With `:profile`, the error of a free parameter is a local profile width: the parameter
+    is displaced from its optimum, all other free parameters are re-fitted (inside
+    `p_space`) at every displacement, and the error is the larger of the two displacements
+    (one on each side) at which the re-fitted quality first reaches `error_threshold` times
+    its minimum when moving outward from the fit. The profiled parameter itself is not
+    bounded by `p_space`. With `:conditional`, the other parameters are held at their
+    optimal values instead, which ignores correlations between parameters and gives smaller
+    errors. With one free parameter both methods agree. An error is `NaN` if the threshold
+    is never reached or the quality becomes undefined (no overlap within `dx`) first. If the
+    profile finds a quality lower than the minimum inside `p_space`, the fit is re-optimized
+    from there and the analysis restarts (up to 3 times, with a warning), so `optimal_ps`
+    and `minimum` can change during the error analysis. If the restarts run out, all errors
+    are `NaN`. A lower quality outside `p_space` gives `NaN` for that parameter and a
+    warning that `p_space` may need widening. The errors are widths defined by a quality
+    threshold, not standard deviations with a known coverage. Profiling accounts for
+    correlations between parameters, but the threshold is not calibrated and correlated
+    data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.
 - `error_threshold::Union{Float64,Vector{Float64}}=1.3`: The error of a parameter is the
-    largest deviation from its optimal value (with all other parameters fixed) at which
-    the quality function reaches `error_threshold` times its minimum. Must be larger than 1.
+    largest deviation from its optimal value, with the other free parameters re-fitted
+    (`:profile`) or fixed (`:conditional`), at which the quality function reaches
+    `error_threshold` times its minimum. Must be larger than 1.
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
     initial simplex and adaptive or fixed algorithm parameters.
 - `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
