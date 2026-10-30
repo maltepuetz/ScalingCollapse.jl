@@ -152,6 +152,7 @@
             minimum=minimum,
             error_threshold=[1.3, 1.3],
             verbose=false,
+            error=:conditional,
         )
 
         # optimum at exactly zero (used to loop forever)

@@ -21,8 +21,8 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `starting_ps::Vector{Float64}`: If `starting_ps` are given, there will be no initial
     parameter space scan. Instead, the optimization will start at the given points. This is
     much faster, but might not find the global minimum.
-- `error::Bool=true`: If `error=true`, the error analysis will be performed to give
-    estimates of the uncertainties of the optimal parameters.
+- `error::Union{Bool,Symbol}=true`: `true`/`:profile` (default), `:conditional`, or
+    `false` (no error analysis)
 - `error_threshold::Union{Float64,Vector{Float64}}=1.3`: The error of a parameter is the
     largest deviation from its optimal value (with all other parameters fixed) at which
     the quality function reaches `error_threshold` times its minimum. Must be larger than 1.
@@ -42,7 +42,7 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `minimum::Float64`: minimum of the objective function
 - `solved::Bool`: `true` if optimization was called
 - `verbose::Bool`: print information during optimization
-- `error::Bool`: perform error analysis
+- `error::Symbol`: error analysis method (`:profile`, `:conditional` or `:none`)
 - `quality_scan::QualityFunction`: quality function for the parameter space scan
 - `quality::QualityFunction`: quality function
 - `skip_scan::Bool`: `true` if `starting_ps` are given by the user
@@ -130,7 +130,7 @@ mutable struct ScalingProblem
     # other options
     solved::Bool
     verbose::Bool
-    error::Bool
+    error::Symbol
     quality_scan::QualityFunction
     quality::QualityFunction
     skip_scan::Bool
@@ -219,7 +219,7 @@ mutable struct ScalingProblem
         p_space = get(kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:n_ps])
         dx = get(kwargs, :dx, [-Inf, Inf])
         verbose = get(kwargs, :verbose, false)
-        error = get(kwargs, :error, true)
+        error = _error_method(get(kwargs, :error, true))
         skip_scan = false
         starting_ps = get(kwargs, :starting_ps, zeros(n_ps))
         if haskey(kwargs, :starting_ps)
@@ -395,9 +395,19 @@ function solve!(sp::ScalingProblem)
     optimize_parameters!(sp)
 
     # perform error analysis
-    if sp.error
+    if sp.error !== :none
         error_analysis!(sp)
     end
+end
+
+# map the user-facing `error` keyword to the internal method symbol
+function _error_method(x)
+    (x === true || x === :profile) && return :profile
+    x === :conditional && return :conditional
+    x === false && return :none
+    throw(ArgumentError(
+        "error must be one of true, false, :profile, :conditional, got $(repr(x))."
+    ))
 end
 
 

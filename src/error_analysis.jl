@@ -1,4 +1,20 @@
-function error_analysis!(sp)
+function error_analysis!(sp; max_restarts::Int=3)
+    if sp.error === :conditional
+        _conditional_errors!(sp)
+    elseif sp.error === :profile
+        _profile_errors!(sp; max_restarts)
+    else
+        throw(ArgumentError("unknown error analysis method $(repr(sp.error))."))
+    end
+    return nothing
+end
+
+function _profile_errors!(sp; max_restarts::Int=3)
+    # TODO Task 3
+    return _conditional_errors!(sp)
+end
+
+function _conditional_errors!(sp)
 
     sp.verbose && @info "Starting error analysis..."
 

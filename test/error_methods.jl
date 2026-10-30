@@ -56,4 +56,19 @@
                 [3.0086057594151985e-5, 0.002085947931419029, 0.000520178097105716]; rtol=1e-8)
         end
     end
+
+    @testset "error keyword" begin
+        kw = (sf=ScalingFunction(:x), dx=[-1.0, 1.0], p_space=[2.0:0.1:2.4, 0.5:0.1:1.5])
+        @test_throws ArgumentError ScalingProblem(Ts, binder, Ls; kw..., error=:bogus)
+
+        sp = ScalingProblem(Ts, binder, Ls; kw..., error=false)
+        @test sp.error === :none
+        @test all(iszero, sp.optimal_ps_error)
+
+        sp = ScalingProblem(Ts, binder, Ls; kw..., error=true)
+        @test sp.error === :profile
+
+        sp = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
+        @test sp.error === :conditional
+    end
 end
