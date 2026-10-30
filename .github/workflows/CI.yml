@@ -32,11 +32,19 @@ jobs:
         arch:
           - x64
           - x86
+          - aarch64
         exclude:
+          # macos-latest is Apple Silicon: test native aarch64, not x64 under Rosetta
+          - os: macos-latest
+            arch: x64
           - os: macos-latest
             arch: x86
           - os: ubuntu-latest
             arch: x86
+          - os: ubuntu-latest
+            arch: aarch64
+          - os: windows-latest
+            arch: aarch64
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
