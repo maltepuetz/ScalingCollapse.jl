@@ -50,13 +50,15 @@ the README.
 |---|---|
 | `true` (default) | same as `:profile` |
 | `:profile` | local profile width (new default) |
-| `:conditional` | previous method, bit for bit (other parameters fixed) |
+| `:conditional` | previous method, same numbers (other parameters fixed) |
 | `false` | no error analysis |
 
 Any other value throws an `ArgumentError` listing the accepted values. `sp.error` stores the
-normalized method. `:conditional` uses the previous code path, bracket start and precision 1e-10;
-four fixtures frozen before the change (commit 0cd93d5) check it (rtol 1e-8, same
-machine).
+normalized method. `:conditional` gives the same numbers as before: same bracket start and
+precision 1e-10, same treatment of Inf as a crossing. The code was restructured into helpers shared
+with the profile method (`_conditional_errors!` is no longer byte-for-byte the old text). Four
+fixtures frozen before the change (commit 0cd93d5) check it: `==` on one machine (verified), rtol
+1e-8 in CI.
 
 ## Rulings made while building
 
@@ -72,6 +74,15 @@ machine).
   restart finds a deeper minimum (quality 8.33e-6 to about 4.1e-6) separated from the original by a
   barrier, at nu of about 0.89 instead of 0.91. The error analysis is allowed to move the optimum,
   and this is such a case; the maintainer may prefer a different expectation or fit setup.
+- Inner-fit retry: if the first inner fit did not converge and already started from the conditional
+  candidate, the retry starts from where that fit stopped (retrying the identical fit is pointless).
+- One warning per parameter per reason, not per side (less detail on which side failed).
+- `_conditional_errors!` was refactored into shared helpers, accepted on the condition that the four
+  Task 1 fixtures stay `==` on the same machine (verified).
+- `test/error_methods.jl` loads the bond_strength and synthetic data with small inline HDF5 loaders
+  instead of including `test/collapses/cases_*.jl`, to avoid duplicate `CASES` definitions (about
+  10 lines of loader duplication). The `error` docstring entry was first reduced to the four accepted
+  values and fully explained later.
 - Restart and inner-fit warnings in the test log are left visible, because they report real
   non-convergence of those fits (list below).
 
@@ -92,7 +103,8 @@ No profile error is below conditional * (1 - 1e-3) when both are measured at the
 The raw minimum (0.625) is one parameter, `learning_potts_vertical_g28` nu: the profile run
 re-optimized the fit (quality 2.646 to 2.021), so its conditional counterpart was measured at a
 different, worse fit. The conditional error at the re-optimized fit is 0.00380 against the
-profile's 0.00530 (ratio 1.39). The same holds for the other three cases whose minimum moved:
+profile's 0.00530 (ratio 1.39). The same holds for the other three cases whose minimum moved (conditional errors rerun at the
+profile run's final optimum with `starting_ps`; log in the scratchpad, `samefit.log`):
 
 | case | minimum (conditional run to profile run) | profile / conditional at the same fit |
 |---|---|---|
@@ -154,11 +166,15 @@ Left visible on purpose (11 in the last full run):
 
 - Restart after a lower quality (7): `learning_potts_vertical_g28` (2.646 to 2.021),
   `synthetic_noise_err_SingleSpline` (90.36 to 71.25), `synthetic_corrections_SingleSpline` and
-  `synthetic_corrections_SingleSpline_sanity` (88.35 to 70.97 each), and three `test/ising.jl` fits
-  (Magnetization 8.33e-6 to 4.06e-6; two Susceptibility fits).
+  `synthetic_corrections_SingleSpline_sanity` (88.35 to 70.97 each), and 3 restart warnings from 2
+  fits in `test/ising.jl`: Magnetization (2 restarts, 8.33e-6 to 4.10e-6 to 4.06e-6) and one further
+  fit (1 restart, 1.218e-6 to 1.205e-6; Susceptibility judging by its parameter values).
 - "may be underestimated" (inner fits did not converge): `learning_ising_vertical_g1` (p3),
   `learning_potts_vertical_g1` (p2, p3).
 - `learning_potts_vertical_g1` also emits one Nelder-Mead 1000-iteration warning.
+
+Not covered by a dedicated test: the branch of `_reoptimize!` that adopts the profile's lowest point
+when the re-optimized minimum is above it.
 
 ## Known limitation
 
