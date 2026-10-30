@@ -1,3 +1,19 @@
+# Minimal stand-in for a ScalingProblem: the fields error_analysis! and optimize_starting_ps! read.
+Base.@kwdef mutable struct ErrorHarness
+    quality
+    optimal_ps = [0.0, 0.0]
+    optimal_ps_error = zeros(2)
+    minimum = 1.0
+    error_threshold = [1.3, 1.3]
+    p_space = [-10.0:0.1:10.0, -10.0:0.1:10.0]
+    starting_ps = [0.0, 0.0]
+    verbose = false
+    error = :profile
+    sf = ScalingFunction(:x; p_names=["a", "b"])
+    optimizer = ScalingCollapse.Optim.NelderMead()
+    optimizer_options = ScalingCollapse.Optim.Options()
+end
+
 @testset "error methods" begin
     # Fixtures recorded on main before the profile-error work: the default error of that time is
     # now `error=:conditional`. Compared with rtol (not ==) because the literals come from one
@@ -70,5 +86,112 @@
 
         sp = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
         @test sp.error === :conditional
+    end
+
+    @testset "profile width" begin
+        errors!(sp) = (ScalingCollapse.error_analysis!(sp); sp.optimal_ps_error)
+        correlated(ρ) = (sp, ps; check_bounds=false) -> 1 + ps[1]^2 + ps[2]^2 + 2ρ * ps[1] * ps[2]
+
+        @testset "correlated quadratic" begin
+            @test errors!(ErrorHarness(quality=correlated(0.8))) ≈
+                  fill(sqrt(0.3 / (1 - 0.64)), 2) rtol = 1e-3
+            @test errors!(ErrorHarness(quality=correlated(0.8), error=:conditional)) ≈
+                  fill(sqrt(0.3), 2)
+        end
+
+        @testset "one free parameter" begin
+            kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"], nu=1),
+                p_space=[2.0:0.1:2.4], dx=[-1.0, 1.0])
+            sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
+            sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
+            @test sp_profile.optimal_ps_error == sp_conditional.optimal_ps_error
+        end
+
+        @testset "two valleys" begin
+            # a second valley around a = 1 lies beyond a barrier above the threshold
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) ->
+                1 + ps[2]^2 + 25 * ps[1]^2 * (ps[1] - 1)^2)
+            errors!(sp)
+            @test sp.optimal_ps_error[1] ≈ 0.125224 rtol = 1e-3
+        end
+
+        @testset "invalid region" begin
+            cutoff(c) = (sp, ps; check_bounds=false) -> abs(ps[1]) < c ? 1 + sum(abs2, ps) : Inf
+            sp = ErrorHarness(quality=cutoff(0.5))
+            @test_logs (:warn, r"undefined") ScalingCollapse.error_analysis!(sp)
+            @test isnan(sp.optimal_ps_error[1])
+            @test sp.optimal_ps_error[2] ≈ sqrt(0.3) rtol = 1e-3
+
+            @test errors!(ErrorHarness(quality=cutoff(0.6)))[1] ≈ sqrt(0.3) rtol = 1e-3
+        end
+
+        @testset "nuisance bounds" begin
+            # b is confined to [-0.1, 0.1]: for a > 0.125 the profile sits at b = ∓0.1
+            q = correlated(0.8)
+            sp = ErrorHarness(
+                quality=(sp, ps; check_bounds=false) -> check_bounds ? Inf : q(sp, ps),
+                p_space=[-10.0:0.1:10.0, -0.1:0.01:0.1],
+            )
+            # root of a² − 0.16a − 0.29 = 0
+            @test errors!(sp)[1] ≈ (0.16 + sqrt(0.16^2 + 4 * 0.29)) / 2 rtol = 1e-3
+        end
+
+        @testset "per-parameter thresholds" begin
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) -> 1 + sum(abs2, ps),
+                error_threshold=[1.3, 2.0])
+            @test errors!(sp) ≈ [sqrt(0.3), 1.0] rtol = 1e-3
+        end
+
+        @testset "inner fit failure" begin
+            # inner fits never converge in one iteration: one warning per parameter
+            sp = ErrorHarness(quality=correlated(0.8),
+                optimizer_options=ScalingCollapse.Optim.Options(iterations=1))
+            @test_logs (:warn, r"parameter a may be underestimated") (:warn,
+                r"parameter b may be underestimated") ScalingCollapse.error_analysis!(sp)
+            @test all(sp.optimal_ps_error .>= sqrt(0.3) * (1 - 1e-3))
+        end
+
+        @testset "optimum at zero" begin
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) -> 1 + sum(abs2, ps))
+            @test errors!(sp) ≈ fill(sqrt(0.3), 2) rtol = 1e-3
+        end
+
+        # profile errors are at least the conditional errors (up to the bisection precision)
+        at_least_conditional(profile, conditional) =
+            all(isfinite, profile) && all(profile .>= conditional .* (1 - 1e-3))
+
+        @testset "profile ≥ conditional" begin
+            kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
+                p_space=[2.0:0.1:2.4, 0.5:0.1:1.5], dx=[-1.0, 1.0])
+            sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
+            sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
+            @test at_least_conditional(sp_profile.optimal_ps_error,
+                sp_conditional.optimal_ps_error)
+        end
+
+        @testset "profile with starting_ps" begin
+            kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
+                starting_ps=[2.27, 1.0], dx=[-1.0, 1.0])
+            sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
+            sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
+            @test at_least_conditional(sp_profile.optimal_ps_error,
+                sp_conditional.optimal_ps_error)
+        end
+
+        @testset "fixed parameter" begin
+            # second CDW fit: nu fixed, x_c and gamma free
+            fit(error) = ScalingProblem(
+                [X_L4, X_L6, X_L8, X_L10, X_L12],
+                [Y_L4, Y_L6, Y_L8, Y_L10, Y_L12],
+                [E_L4, E_L6, E_L8, E_L10, E_L12],
+                [4, 6, 8, 10, 12];
+                sf=ScalingFunction(:xny, p_names=["x_c", "nu", "gamma"], nu=1),
+                p_space=[5:0.1:7, 1:0.1:3],
+                dx=[-2, 2],
+                error,
+            )
+            @test at_least_conditional(fit(:profile).optimal_ps_error,
+                fit(:conditional).optimal_ps_error)
+        end
     end
 end
