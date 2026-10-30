@@ -17,15 +17,26 @@ const _PROFILE_GROWTH = 1.5             # outward bracket growth factor
 const _PROFILE_PRECISION = 1e-3         # relative bisection precision
 const _PROFILE_MAX_STEPS = 60           # outward bracket steps per side
 const _PROFILE_MAX_BISECTIONS = 100
+const _PROFILE_LOWER_TOLERANCE = 1e-6   # relative; a lower quality means a better fit exists
 
 # bookkeeping of the profile evaluations of one parameter
 mutable struct _ProfileRecord
     n_failed::Int                   # inner fits that did not converge
-    lowest_q::Float64               # lowest quality seen ...
+    lowest_q::Float64               # lowest quality seen inside p_space ...
     lowest_ps::Vector{Float64}      # ... and its full parameter vector
+    lower_outside::Bool             # a lower quality was seen outside p_space
     failures::Vector{Tuple{Symbol,String}}  # (reason, side) of each side without a width
 end
-_ProfileRecord(sp) = _ProfileRecord(0, sp.minimum, copy(sp.optimal_ps), [])
+_ProfileRecord(sp) = _ProfileRecord(0, sp.minimum, copy(sp.optimal_ps), false, [])
+
+# whether q is lower than the minimum by more than the tolerance
+_is_lower(sp, q) = q < sp.minimum * (1.0 - _PROFILE_LOWER_TOLERANCE)
+
+# whether a profile evaluation found a better fit inside p_space
+_found_lower(sp, record::_ProfileRecord) = _is_lower(sp, record.lowest_q)
+
+_inside_p_space(sp, ps) =
+    all(j -> first(sp.p_space[j]) <= ps[j] <= last(sp.p_space[j]), eachindex(ps))
 
 function _warn_profile_failure(p_name, threshold, reason, sides)
     reach = "error_threshold = $(threshold) times its minimum"
@@ -50,16 +61,50 @@ function _profile_errors!(sp; max_restarts::Int=3)
     sp.verbose && @info "Starting error analysis..."
     _has_valid_minimum(sp) || return nothing
 
-    # lowest quality found by any profile evaluation (acted upon in Task 4)
-    lowest_q, lowest_ps = sp.minimum, copy(sp.optimal_ps)
+    # stop at the first parameter whose profile finds a better fit inside p_space
+    lower = nothing
     for i in eachindex(sp.optimal_ps)
         sp.optimal_ps_error[i], record = _profile_error(sp, i)
-        if record.lowest_q < lowest_q
-            lowest_q, lowest_ps = record.lowest_q, record.lowest_ps
+        if _found_lower(sp, record)
+            lower = record
+            break
         end
+    end
+
+    if !isnothing(lower)
+        old_minimum = sp.minimum
+        if max_restarts > 0
+            # re-optimize from the better point and redo the analysis from scratch
+            _reoptimize!(sp, lower.lowest_ps)
+            @warn "The error analysis found a lower quality than the minimum: the fit is " *
+                  "re-optimized, which moves the minimum from $(old_minimum) to " *
+                  "$(sp.minimum) (optimal parameters $(sp.optimal_ps)), and the error " *
+                  "analysis is restarted."
+            return _profile_errors!(sp; max_restarts=max_restarts - 1)
+        end
+        sp.optimal_ps = lower.lowest_ps
+        sp.minimum = lower.lowest_q
+        sp.optimal_ps_error .= NaN
+        @warn "The minimum could not be confirmed: the error analysis found a lower quality " *
+              "than the minimum $(old_minimum) and no restarts are left. The optimal " *
+              "parameters are set to the best fit found, $(sp.optimal_ps) with quality " *
+              "$(sp.minimum), and all parameter errors are set to NaN."
+        return nothing
     end
     sp.verbose && @info "Found errors."
 
+    return nothing
+end
+
+# final optimization started from ps; sp.starting_ps keeps its value
+function _reoptimize!(sp, ps)
+    starting_ps = sp.starting_ps
+    sp.starting_ps = ps
+    try
+        optimize_starting_ps!(sp)
+    finally
+        sp.starting_ps = starting_ps
+    end
     return nothing
 end
 
@@ -71,10 +116,22 @@ function _profile_error(sp, i::Int)
     deltas, f0 = _conditional_roots(sp, i)
     any(isnothing, deltas) && return _no_crossing_error(sp, i), record
 
-    widths = map(d -> _profile_side(sp, i, d, f0; record), deltas)
+    widths = Union{Nothing,Float64}[]
+    for d in deltas
+        push!(widths, _profile_side(sp, i, d, f0; record))
+        # the analysis is redone from a better fit (see _profile_errors!)
+        _found_lower(sp, record) && return NaN, record
+    end
+
+    p_name = scaled_p_names(sp.sf)[i]
+    if record.lower_outside
+        @warn "Error analysis failed for parameter $(p_name): the profile quality is lower " *
+              "than the minimum for $(p_name) outside p_space. A better fit may exist " *
+              "outside p_space, consider widening p_space. The error is set to NaN."
+        return NaN, record
+    end
 
     # one warning per parameter and reason
-    p_name = scaled_p_names(sp.sf)[i]
     for reason in unique(first.(record.failures))
         sides = join([side for (r, side) in record.failures if r === reason], " and ")
         _warn_profile_failure(p_name, sp.error_threshold[i], reason, sides)
@@ -113,11 +170,15 @@ function _profile_side(sp, i::Int, d::Float64, f0::Float64;
         converged || (record.n_failed += 1)
         isfinite(q) || return NaN
         push!(visited, (x, nu))
-        if q < record.lowest_q
-            record.lowest_q = q
-            record.lowest_ps = copy(sp.optimal_ps)
-            record.lowest_ps[i] += x
-            record.lowest_ps[nuisance] .= nu
+        if q < sp.minimum
+            ps = copy(sp.optimal_ps)
+            ps[i] += x
+            ps[nuisance] .= nu
+            if !_inside_p_space(sp, ps)
+                record.lower_outside |= _is_lower(sp, q)
+            elseif q < record.lowest_q
+                record.lowest_q, record.lowest_ps = q, ps
+            end
         end
         return q / sp.minimum - threshold
     end

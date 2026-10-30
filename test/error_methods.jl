@@ -194,4 +194,44 @@ end
                 fit(:conditional).optimal_ps_error)
         end
     end
+
+    @testset "lower quality during the profile" begin
+        # narrow tilted valley with its minimum 1 at a = b = 0.6, reported at [0, 0]: the
+        # profile of a at its conditional root (≈ 0.055) re-fits b to a quality below 1.0036
+        valley(sp, ps; check_bounds=false) =
+            1 + 100 * (ps[1] - ps[2])^2 + 0.01 * (ps[2] - 0.6)^2
+        reported_valley() = ErrorHarness(quality=valley, minimum=valley(nothing, [0.0, 0.0]))
+
+        @testset "restart" begin
+            sp = reported_valley()
+            @test_logs (:warn, r"lower quality") ScalingCollapse.error_analysis!(sp)
+            @test sp.minimum ≈ 1.0 atol = 1e-4
+            @test sp.optimal_ps ≈ [0.6, 0.6] atol = 1e-2
+            @test sp.optimal_ps_error ≈ fill(sqrt(0.3 * 100.01), 2) rtol = 1e-2
+        end
+
+        @testset "outside p_space" begin
+            # the quality drops by 0.01 for |b| ≥ 0.5, which a only reaches outside p_space
+            sp = ErrorHarness(
+                quality=(sp, ps; check_bounds=false) ->
+                    1 + (ps[1] - ps[2])^2 + (abs(ps[2]) >= 0.5 ? -0.01 : 0.0),
+                p_space=[-0.12:0.01:0.12, -1.0:0.01:1.0],
+            )
+            @test_logs (:warn, r"outside p_space") ScalingCollapse.error_analysis!(sp)
+            @test isnan(sp.optimal_ps_error[1])
+            @test isfinite(sp.optimal_ps_error[2])
+            @test sp.optimal_ps == [0.0, 0.0]
+            @test sp.minimum == 1.0
+        end
+
+        @testset "restarts exhausted" begin
+            sp = reported_valley()
+            @test_logs (:warn, r"could not be confirmed") ScalingCollapse.error_analysis!(sp;
+                max_restarts=0)
+            @test all(isnan, sp.optimal_ps_error)
+            @test sp.minimum < 1.0036
+            @test all(j -> first(sp.p_space[j]) <= sp.optimal_ps[j] <= last(sp.p_space[j]),
+                eachindex(sp.optimal_ps))
+        end
+    end
 end
