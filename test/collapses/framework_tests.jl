@@ -48,6 +48,9 @@ end
         @test !all(r.pass for r in check_regression("x", fake([1.03, 2.0], [0.1, 0.1]), ref))
         @test !all(r.pass for r in check_regression("x", fake([1.0, 2.0], [0.04, 0.1]), ref))
         @test !all(r.pass for r in check_regression("x", fake([1.0, 2.0], [0.21, 0.1]), ref))
+        # check_errors=false ([published]) keeps the value check and drops the error ratio
+        @test all(r.pass for r in check_regression("x", fake([1.0, 2.0], [0.21, 0.1]), ref; check_errors=false))
+        @test !all(r.pass for r in check_regression("x", fake([1.03, 2.0], [0.1, 0.1]), ref; check_errors=false))
 
         rows = check_regression("x", fake([1.0], [0.1]), ref)
         @test length(rows) == 1 && !rows[1].pass && occursin("parameter count", rows[1].note)

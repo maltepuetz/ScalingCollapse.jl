@@ -21,11 +21,31 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `starting_ps::Vector{Float64}`: If `starting_ps` are given, there will be no initial
     parameter space scan. Instead, the optimization will start at the given points. This is
     much faster, but might not find the global minimum.
-- `error::Bool=true`: If `error=true`, the error analysis will be performed to give
-    estimates of the uncertainties of the optimal parameters.
+- `error::Union{Bool,Symbol}=true`: error analysis method. `true`/`:profile` (default),
+    `:conditional`, or `false` (no error analysis); anything else throws an `ArgumentError`.
+    With `:profile`, the error of a free parameter is a local profile width: the parameter
+    is displaced from its optimum, all other free parameters are re-fitted (inside
+    `p_space`) at every displacement, and the error is the larger of the two displacements
+    (one on each side) at which the re-fitted quality first reaches `error_threshold` times
+    its minimum when moving outward from the fit. The profiled parameter itself is not
+    bounded by `p_space`. With `:conditional`, the other parameters are held at their
+    optimal values instead, which ignores correlations between parameters and gives smaller
+    or equal errors (equal with one free parameter or uncorrelated parameters). With one free parameter both methods agree. An error is `NaN` if the threshold
+    is never reached or the quality becomes undefined (no overlap within `dx`) first. If the
+    profile finds a quality lower than the minimum inside `p_space`, the fit is re-optimized
+    from there and the analysis restarts (up to 3 times, with a warning), so `optimal_ps`
+    and `minimum` can change during the error analysis. If the restarts run out, all errors
+    are `NaN`. A lower quality outside `p_space` gives `NaN` for that parameter and a
+    warning that `p_space` may need widening. With `error=:profile`, `optimizer` and
+    `optimizer_options` (including `time_limit`, `show_trace` and `callback`) also apply to
+    every inner fit of the error analysis. The errors are widths defined by a quality
+    threshold, not standard deviations with a known coverage. Profiling accounts for
+    correlations between parameters, but the threshold is not calibrated and correlated
+    data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.
 - `error_threshold::Union{Float64,Vector{Float64}}=1.3`: The error of a parameter is the
-    largest deviation from its optimal value (with all other parameters fixed) at which
-    the quality function reaches `error_threshold` times its minimum. Must be larger than 1.
+    largest deviation from its optimal value, with the other free parameters re-fitted
+    (`:profile`) or fixed (`:conditional`), at which the quality function reaches
+    `error_threshold` times its minimum. Must be larger than 1.
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
     initial simplex and adaptive or fixed algorithm parameters.
 - `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
@@ -42,7 +62,7 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `minimum::Float64`: minimum of the objective function
 - `solved::Bool`: `true` if optimization was called
 - `verbose::Bool`: print information during optimization
-- `error::Bool`: perform error analysis
+- `error::Symbol`: error analysis method (`:profile`, `:conditional` or `:none`)
 - `quality_scan::QualityFunction`: quality function for the parameter space scan
 - `quality::QualityFunction`: quality function
 - `skip_scan::Bool`: `true` if `starting_ps` are given by the user
@@ -130,7 +150,7 @@ mutable struct ScalingProblem
     # other options
     solved::Bool
     verbose::Bool
-    error::Bool
+    error::Symbol
     quality_scan::QualityFunction
     quality::QualityFunction
     skip_scan::Bool
@@ -219,7 +239,7 @@ mutable struct ScalingProblem
         p_space = get(kwargs, :p_space, [0.1:0.1:3.0 for _ in 1:n_ps])
         dx = get(kwargs, :dx, [-Inf, Inf])
         verbose = get(kwargs, :verbose, false)
-        error = get(kwargs, :error, true)
+        error = _error_method(get(kwargs, :error, true))
         skip_scan = false
         starting_ps = get(kwargs, :starting_ps, zeros(n_ps))
         if haskey(kwargs, :starting_ps)
@@ -395,9 +415,19 @@ function solve!(sp::ScalingProblem)
     optimize_parameters!(sp)
 
     # perform error analysis
-    if sp.error
+    if sp.error !== :none
         error_analysis!(sp)
     end
+end
+
+# map the user-facing `error` keyword to the internal method symbol
+function _error_method(x)
+    (x === true || x === :profile) && return :profile
+    x === :conditional && return :conditional
+    x === false && return :none
+    throw(ArgumentError(
+        "error must be one of true, false, :profile, :conditional, got $(repr(x))."
+    ))
 end
 
 

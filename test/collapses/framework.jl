@@ -59,10 +59,11 @@ end
 
 """
 Regression criterion against `ref = Dict("optimal_ps"=>…, "optimal_ps_error"=>…)`:
-`|p - p_ref| <= 0.25σ_ref` and `0.5 <= σ_fit/σ_ref <= 2`. NaN reference entries mean
-"no published value" and pass.
+`|p - p_ref| <= 0.25σ_ref` and, if `check_errors`, `0.5 <= σ_fit/σ_ref <= 2`. NaN reference
+entries mean "no published value" and pass. `[published]` is checked with `check_errors=false`,
+since its stored errors come from the conditional method.
 """
-function check_regression(name, sp, ref)
+function check_regression(name, sp, ref; check_errors::Bool=true)
     nan_row(note) = [(param=0, expected=NaN, got=NaN, dev_sigma=NaN, err_ratio=NaN, pass=false, note=note)]
     ref === nothing && return nan_row("no reference for $name; run collapses/update_references.jl")
     ps, σs = Float64.(ref["optimal_ps"]), Float64.(ref["optimal_ps_error"])
@@ -79,7 +80,7 @@ function check_regression(name, sp, ref)
         dev, ratio = abs(got - ps[i]) / σs[i], σ / σs[i]
         notes = String[]
         dev <= 0.25 || push!(notes, "|p-p_ref| > 0.25σ_ref")
-        0.5 <= ratio <= 2 || push!(notes, "σ_fit/σ_ref outside [0.5, 2]")
+        !check_errors || 0.5 <= ratio <= 2 || push!(notes, "σ_fit/σ_ref outside [0.5, 2]")
         push!(rows, (param=i, expected=ps[i], got=got, dev_sigma=dev, err_ratio=ratio,
             pass=isempty(notes), note=join(notes, "; ")))
     end
@@ -138,7 +139,7 @@ function run_cases(cases, refs; runner=run_case)
                 else
                     push!(groups, (check_regression(c.name, sp, get(refs["last"], c.name, nothing)), "last"))
                     haskey(refs["published"], c.name) &&
-                        push!(groups, (check_regression(c.name, sp, refs["published"][c.name]), "published"))
+                        push!(groups, (check_regression(c.name, sp, refs["published"][c.name]; check_errors=false), "published"))
                 end
                 if c.broken  # one result over the rows of all groups
                     report_rows(c.name, reduce(vcat, first.(groups)), "", true)
