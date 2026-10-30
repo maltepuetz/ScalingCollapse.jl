@@ -22,7 +22,8 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
     parameter space scan. Instead, the optimization will start at the given points. This is
     much faster, but might not find the global minimum.
 - `error::Union{Bool,Symbol}=true`: error analysis method. `true`/`:profile` (default),
-    `:conditional`, or `false` (no error analysis); anything else throws an `ArgumentError`.
+    `:conditional`, `:bootstrap`, or `false` (no error analysis); anything else throws an
+    `ArgumentError`.
     With `:profile`, the error of a free parameter is a local profile width: the parameter
     is displaced from its optimum, all other free parameters are re-fitted (inside
     `p_space`) at every displacement, and the error is the larger of the two displacements
@@ -42,10 +43,25 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
     threshold, not standard deviations with a known coverage. Profiling accounts for
     correlations between parameters, but the threshold is not calibrated and correlated
     data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.
+    With `:bootstrap`, the error of a free parameter is a standard deviation: `n_bootstrap`
+    synthetic datasets are drawn by replacing every y value with a Gaussian random number
+    centred on it with its error bar as width, each one is re-fitted (Nelder-Mead from
+    `optimal_ps`, inside `p_space`, with `optimizer` and `optimizer_options`), and the error
+    is the standard deviation of the re-fitted parameter. This requires error bars (`es` or
+    `Measurement` y values) and assumes they are Gaussian and independent; correlated data
+    points are not accounted for. `optimal_ps` and `minimum` remain those of the original
+    data, and `error_threshold` is not used. Re-fits without a finite quality are dropped
+    (with a warning); if more than 10% are dropped, all errors are `NaN`.
 - `error_threshold::Union{Float64,Vector{Float64}}=1.3`: The error of a parameter is the
     largest deviation from its optimal value, with the other free parameters re-fitted
     (`:profile`) or fixed (`:conditional`), at which the quality function reaches
     `error_threshold` times its minimum. Must be larger than 1.
+- `n_bootstrap::Int=100`: number of synthetic datasets for `error=:bootstrap` (at least 2).
+    The bootstrap errors scatter between random seeds by a relative amount of about
+    `1/sqrt(2(n_bootstrap - 1))` (about 7% for 100), which is enough to quote errors to one
+    significant digit; use about 500 or more for a reliable second digit.
+- `rng::AbstractRNG=Random.default_rng()`: random number generator for `error=:bootstrap`;
+    pass a seeded one (e.g. `Random.Xoshiro(42)`) for reproducible errors.
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
     initial simplex and adaptive or fixed algorithm parameters.
 - `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
@@ -62,7 +78,7 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `minimum::Float64`: minimum of the objective function
 - `solved::Bool`: `true` if optimization was called
 - `verbose::Bool`: print information during optimization
-- `error::Symbol`: error analysis method (`:profile`, `:conditional` or `:none`)
+- `error::Symbol`: error analysis method (`:profile`, `:conditional`, `:bootstrap` or `:none`)
 - `quality_scan::QualityFunction`: quality function for the parameter space scan
 - `quality::QualityFunction`: quality function
 - `skip_scan::Bool`: `true` if `starting_ps` are given by the user
@@ -70,6 +86,8 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `errors_defined::Bool`: `true` if errors are given by the user
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration
 - `optimizer_options::Optim.Options`: optimization runtime and stopping configuration
+- `n_bootstrap::Int`: number of synthetic datasets for `error=:bootstrap`
+- `rng::AbstractRNG`: random number generator for `error=:bootstrap`
 
 # Examples
 ```julia
@@ -159,6 +177,8 @@ mutable struct ScalingProblem
     error_threshold::Vector{Float64}
     optimizer::Optim.NelderMead
     optimizer_options::Optim.Options
+    n_bootstrap::Int
+    rng::AbstractRNG
 
 
 
@@ -181,6 +201,8 @@ mutable struct ScalingProblem
         error_threshold,
         optimizer,
         optimizer_options,
+        n_bootstrap,
+        rng,
     )
         return new(
             data,
@@ -201,6 +223,8 @@ mutable struct ScalingProblem
             error_threshold,
             optimizer,
             optimizer_options,
+            n_bootstrap,
+            rng,
         )
     end
 
@@ -280,6 +304,14 @@ mutable struct ScalingProblem
         optimizer_options isa Optim.Options || throw(
             ArgumentError("optimizer_options must be an Optim.Options instance"),
         )
+        n_bootstrap = get(kwargs, :n_bootstrap, 100)
+        (n_bootstrap isa Integer && n_bootstrap >= 2) || throw(ArgumentError(
+            "n_bootstrap must be an integer of at least 2, got $(repr(n_bootstrap))."
+        ))
+        rng = get(kwargs, :rng, Random.default_rng())
+        rng isa AbstractRNG || throw(ArgumentError(
+            "rng must be an AbstractRNG (e.g. Random.Xoshiro(seed)), got $(typeof(rng))."
+        ))
 
         length(p_space) == n_ps || throw(ArgumentError(
             "p_space has $(length(p_space)) entries, but the scaling function has " *
@@ -307,6 +339,10 @@ mutable struct ScalingProblem
                 break
             end
         end
+        (error === :bootstrap && !errors_defined) && throw(ArgumentError(
+            "error=:bootstrap resamples the y values within their error bars, but the data " *
+            "have no error bars. Pass y errors `es` or Measurement y values."
+        ))
 
         # construct unsolved ScalingProblem
         optimal_ps = zeros(n_parameters(sf))
@@ -332,6 +368,8 @@ mutable struct ScalingProblem
             error_threshold,
             optimizer,
             optimizer_options,
+            n_bootstrap,
+            rng,
         )
 
         # solve ScalingProblem
@@ -354,6 +392,8 @@ const SCALINGPROBLEM_KWARGS = (
     :error_threshold,
     :optimizer,
     :optimizer_options,
+    :n_bootstrap,
+    :rng,
 )
 
 function _check_data(data, quality, quality_scan, skip_scan)
@@ -424,9 +464,11 @@ end
 function _error_method(x)
     (x === true || x === :profile) && return :profile
     x === :conditional && return :conditional
+    x === :bootstrap && return :bootstrap
     x === false && return :none
     throw(ArgumentError(
-        "error must be one of true, false, :profile, :conditional, got $(repr(x))."
+        "error must be one of true, false, :profile, :conditional, :bootstrap, got " *
+        "$(repr(x))."
     ))
 end
 
