@@ -243,5 +243,39 @@ end
             @test all(j -> first(sp.p_space[j]) <= sp.optimal_ps[j] <= last(sp.p_space[j]),
                 eachindex(sp.optimal_ps))
         end
+
+        @testset "re-optimization ends above the lower point" begin
+            # the final fit bound-checks and sees a quality 0.01 higher than the profile did,
+            # so the re-optimized minimum (1.01) is worse than the lower point found (1.0)
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) ->
+                1 + sum(abs2, ps .- 0.5) + (check_bounds ? 0.01 : 0.0))
+            ScalingCollapse._reoptimize!(sp, [0.5, 0.5], 1.0)
+            @test sp.optimal_ps == [0.5, 0.5]
+            @test sp.minimum == 1.0
+            @test sp.starting_ps == [0.0, 0.0]
+        end
+    end
+
+    @testset "profile failures" begin
+        @testset "unknown method" begin
+            @test_throws ArgumentError ScalingCollapse.error_analysis!(
+                ErrorHarness(quality=(sp, ps; check_bounds=false) -> 1.0, error=:bogus))
+        end
+
+        @testset "optimum not below threshold" begin
+            # the quality at the optimum (1) is twice the reported minimum (0.5)
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) -> 1 + sum(abs2, ps),
+                minimum=0.5)
+            @test_logs (:warn, r"not below") (:warn, r"not below") ScalingCollapse.error_analysis!(sp)
+            @test all(isnan, sp.optimal_ps_error)
+        end
+
+        @testset "flat profile" begin
+            # b follows a along the flat valley a = b, so the profile never leaves the minimum
+            sp = ErrorHarness(quality=(sp, ps; check_bounds=false) -> 1 + (ps[1] - ps[2])^2,
+                p_space=[-1e12:1e10:1e12, -1e12:1e10:1e12])
+            @test_logs (:warn, r"within 60 steps") match_mode = :any ScalingCollapse.error_analysis!(sp)
+            @test all(isnan, sp.optimal_ps_error)
+        end
     end
 end
