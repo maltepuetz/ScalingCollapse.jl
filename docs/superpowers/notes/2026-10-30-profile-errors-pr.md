@@ -104,7 +104,7 @@ The raw minimum (0.625) is one parameter, `learning_potts_vertical_g28` nu: the 
 re-optimized the fit (quality 2.646 to 2.021), so its conditional counterpart was measured at a
 different, worse fit. The conditional error at the re-optimized fit is 0.00380 against the
 profile's 0.00530 (ratio 1.39). The same holds for the other three cases whose minimum moved (conditional errors rerun at the
-profile run's final optimum with `starting_ps`; log in the scratchpad, `samefit.log`):
+profile run's final optimum with `starting_ps`; scratch run, not committed):
 
 | case | minimum (conditional run to profile run) | profile / conditional at the same fit |
 |---|---|---|

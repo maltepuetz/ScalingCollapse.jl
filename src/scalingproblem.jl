@@ -30,13 +30,15 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
     its minimum when moving outward from the fit. The profiled parameter itself is not
     bounded by `p_space`. With `:conditional`, the other parameters are held at their
     optimal values instead, which ignores correlations between parameters and gives smaller
-    errors. With one free parameter both methods agree. An error is `NaN` if the threshold
+    or equal errors (equal with one free parameter or uncorrelated parameters). With one free parameter both methods agree. An error is `NaN` if the threshold
     is never reached or the quality becomes undefined (no overlap within `dx`) first. If the
     profile finds a quality lower than the minimum inside `p_space`, the fit is re-optimized
     from there and the analysis restarts (up to 3 times, with a warning), so `optimal_ps`
     and `minimum` can change during the error analysis. If the restarts run out, all errors
     are `NaN`. A lower quality outside `p_space` gives `NaN` for that parameter and a
-    warning that `p_space` may need widening. The errors are widths defined by a quality
+    warning that `p_space` may need widening. With `error=:profile`, `optimizer` and
+    `optimizer_options` (including `time_limit`, `show_trace` and `callback`) also apply to
+    every inner fit of the error analysis. The errors are widths defined by a quality
     threshold, not standard deviations with a known coverage. Profiling accounts for
     correlations between parameters, but the threshold is not calibrated and correlated
     data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.

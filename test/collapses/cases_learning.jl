@@ -39,7 +39,8 @@ push!(CASES, CollapseCase(;
     exact=Dict(1 => 1.0, 2 => 1.0),
     # published fit 1.00058(16) is 3.6σ from 1 (measured |x_c − 1| = 5.75e-4); small-size bias
     δabs=Dict(1 => 1e-3),
-    # measured: x_c = 1.000575 ± 0.000340 (1.7σ), ν = 0.9981 ± 0.0079 (0.2σ)
+    # measured: x_c = 1.000575 ± 0.000340 (1.7σ), ν = 0.9981 ± 0.0079 (0.2σ). δabs was set from
+    # the conditional errors and is kept, although with profile errors x_c is now 1.7σ off.
     σmax=Dict(1 => 1.0e-3, 2 => 2.4e-2),
     source="arXiv:2504.12385, vertical cut γ = 0.3 (index 16), L = ds[2:5]",
 ))
