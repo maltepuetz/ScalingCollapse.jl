@@ -10,6 +10,14 @@ function _bootstrap_synthetic(rng; x_c=0.5, nu=1.0, sigma=0.02)
     return xs, ys, es, Ls_b
 end
 
+# Linear quality that is Inf when `fails` returns true for the first y value of the data, to
+# make chosen bootstrap refits fail
+struct _FailingLinear <: ScalingCollapse.QualityFunction
+    fails::Function
+end
+(qf::_FailingLinear)(sp, ps; check_bounds=false) =
+    qf.fails(sp.data[1].ys[1]) ? Inf : Linear()(sp, ps; check_bounds)
+
 const _BOOTSTRAP_KW = (
     sf=ScalingFunction(:x; p_names=["x_c", "nu"]),
     starting_ps=[0.5, 1.0],
@@ -66,6 +74,24 @@ const _BOOTSTRAP_KW = (
         end
         ratio = mean(bootstrap) ./ true_spread
         @test all(r -> 0.7 < r < 1.5, ratio)
+    end
+
+    @testset "failed refits" begin
+        xs, ys, es, Ls_b = _bootstrap_synthetic(Xoshiro(1))
+        y0 = ys[1][1]
+
+        # a few refits fail (resampled y more than 2 error bars above y0): dropped, warning
+        sp = @test_logs (:warn, r"were dropped") match_mode=:any ScalingProblem(
+            xs, ys, es, Ls_b; _BOOTSTRAP_KW..., quality=_FailingLinear(y -> y > y0 + 0.04),
+            error=:bootstrap, n_bootstrap=100, rng=Xoshiro(1))
+        @test all(isfinite, sp.optimal_ps_error)
+
+        # every refit fails: errors are NaN, warning
+        sp = @test_logs (:warn, r"Bootstrap error analysis failed") match_mode=:any ScalingProblem(
+            xs, ys, es, Ls_b; _BOOTSTRAP_KW..., quality=_FailingLinear(y -> y != y0),
+            error=:bootstrap, n_bootstrap=20, rng=Xoshiro(1))
+        @test all(isnan, sp.optimal_ps_error)
+        @test isfinite(sp.minimum)
     end
 
     @testset "CDW data with error bars" begin
