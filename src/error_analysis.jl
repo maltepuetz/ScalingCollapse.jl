@@ -3,6 +3,8 @@ function error_analysis!(sp; max_restarts::Int=3)
         _conditional_errors!(sp)
     elseif sp.error === :profile
         _profile_errors!(sp; max_restarts)
+    elseif sp.error === :bootstrap
+        _bootstrap_errors!(sp)
     else
         throw(ArgumentError("unknown error analysis method $(repr(sp.error))."))
     end
@@ -395,3 +397,59 @@ function _root(l, fl, r, fr, f::Function; precision=1e-10, max_iterations=200)
 
     return m
 end
+
+
+# Bootstrap errors (`error = :bootstrap`): every y value is redrawn from a Gaussian centred on
+# it with its error bar as width, the final optimization is repeated from optimal_ps, and the
+# error of a parameter is the standard deviation of its refitted values. The fit of the
+# original data (optimal_ps, minimum) is not changed.
+const _BOOTSTRAP_MAX_DROPPED = 0.1  # fraction of failed refits above which the errors are NaN
+
+function _bootstrap_errors!(sp)
+
+    sp.verbose && @info "Starting bootstrap error analysis..."
+
+    data = sp.data
+    samples = Vector{Float64}[]
+    n_unconverged = 0
+    try
+        for _ in 1:sp.n_bootstrap
+            sp.data = [_resample(sp.rng, d) for d in data]
+            f = ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true))
+            result = optimize(f, sp.optimal_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
+            # refits without any finite quality are dropped
+            isfinite(Optim.minimum(result)) || continue
+            Optim.converged(result) || (n_unconverged += 1)
+            push!(samples, Optim.minimizer(result))
+        end
+    finally
+        sp.data = data
+    end
+
+    n_dropped = sp.n_bootstrap - length(samples)
+    if n_dropped > _BOOTSTRAP_MAX_DROPPED * sp.n_bootstrap || length(samples) < 2
+        @warn "Bootstrap error analysis failed: $(n_dropped) of $(sp.n_bootstrap) refits " *
+              "did not find parameters with a finite quality (the resampled data do not " *
+              "overlap within dx or p_space). The parameter errors are set to NaN."
+        sp.optimal_ps_error .= NaN
+        return nothing
+    end
+    n_dropped > 0 && @warn "Bootstrap error analysis: $(n_dropped) of $(sp.n_bootstrap) " *
+                           "refits did not find parameters with a finite quality and were " *
+                           "dropped."
+    if n_unconverged > 0 && sp.optimizer_options.show_warnings
+        @warn "Bootstrap error analysis: $(n_unconverged) of $(sp.n_bootstrap) refits " *
+              "stopped without converging. Their parameters are kept, so the errors " *
+              "might be slightly inaccurate."
+    end
+
+    for i in eachindex(sp.optimal_ps)
+        sp.optimal_ps_error[i] = std(getindex.(samples, i))
+    end
+    sp.verbose && @info "Found errors."
+
+    return nothing
+end
+
+# copy of d with every y value redrawn from a Gaussian with its error bar as width
+_resample(rng, d::Data) = Data(d.L, d.xs, d.ys .+ d.es .* randn(rng, length(d.ys)), d.es)

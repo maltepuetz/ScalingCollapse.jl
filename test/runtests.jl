@@ -14,6 +14,7 @@ using HDF5
     include("nelder_mead_configuration.jl")
     include("error_handling.jl")
     include("error_methods.jl")
+    include("bootstrap_errors.jl")
     include("utilityfunctions.jl")
     include("collapses/framework_tests.jl")
     include("collapses/runcollapses.jl")

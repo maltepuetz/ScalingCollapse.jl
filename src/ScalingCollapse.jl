@@ -4,6 +4,7 @@ using Dierckx
 using KissSmoothing
 using Measurements
 using Optim
+using Random
 using Statistics
 
 export ScalingProblem
