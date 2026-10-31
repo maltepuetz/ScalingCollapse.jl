@@ -22,7 +22,7 @@ function (::Houdayer)(sp, parameters; check_bounds=false)
         end
     end
 
-    scaled_data = [sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
+    scaled_data = Data[sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
 
     # set interval in which we want to optimize
     interval = Vector{Float64}(undef, 2)

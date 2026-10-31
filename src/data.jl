@@ -20,7 +20,8 @@ struct Data
             "Data for L = $L has mismatched lengths: $(length(xs)) x values, " *
             "$(length(ys)) y values and $(length(es)) error values."
         ))
-        perm = sortperm(xs)
+        # sortperm is stable, so it is the identity for sorted xs
+        perm = issorted(xs) ? eachindex(xs) : sortperm(xs)
         xsd = similar(xs)
         ysd = similar(ys)
         esd = similar(es)
