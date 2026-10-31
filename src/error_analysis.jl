@@ -249,7 +249,9 @@ function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64})
     end
 
     conditional = sp.optimal_ps[nuisance]
-    q_conditional, q_warm = f(conditional), f(warm)
+    q_conditional = f(conditional)
+    # the first profile point of each side starts from the optimum itself
+    q_warm = isequal(warm, conditional) ? q_conditional : f(warm)
     start_conditional = q_conditional <= q_warm
     q, nu = start_conditional ? (q_conditional, conditional) : (q_warm, copy(warm))
     # no finite starting point: the point is invalid

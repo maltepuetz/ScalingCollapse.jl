@@ -33,7 +33,7 @@ function (sqf::MultipleSplines)(sp, parameters; check_bounds=false)
         end
     end
 
-    scaled_data = [sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
+    scaled_data = Data[sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
 
     # set interval in which we want to optimize
     interval = Vector{Float64}(undef, 2)
@@ -69,11 +69,10 @@ function _S_unweighted(scaled_data, interval, N_steps)
     ]
 
     xvals = range(interval[1], interval[2], length=N_steps)
+    xs_eval = collect(xvals)
     yvals = zeros(N_steps, length(scaled_data))
     for l in eachindex(scaled_data)
-        for (i, x) in enumerate(xvals)
-            yvals[i, l] = y_splines[l](x)
-        end
+        yvals[:, l] = evaluate(y_splines[l], xs_eval)
     end
 
     # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
@@ -88,8 +87,10 @@ function _S_unweighted(scaled_data, interval, N_steps)
 
     # calculate quality of the scaling
     S = 0.0
+    row = zeros(size(yvals, 2))
     for i in axes(yvals, 1)
-        S += var(yvals[i, :])
+        copyto!(row, view(yvals, i, :))
+        S += var(row)
     end
     S /= N_steps
 
@@ -117,32 +118,47 @@ function _S_weighted(scaled_data, interval, N_steps, weight_density)
     !weight_density && (dp_densities .= 1.0)
 
     xvals = range(interval[1], interval[2], length=N_steps)
-    yvals = zeros(Measurement, length(scaled_data), N_steps)
-
-    for (i, x) in enumerate(xvals)
-        for l in eachindex(scaled_data)
-            y = y_splines[l](x)
-            e = e_splines[l](x) + 1e-6  # add small number to avoid division by zero
-            yvals[l, i] = measurement(y, e)
-        end
+    xs_eval = collect(xvals)
+    n = length(scaled_data)
+    yvals = Matrix{Float64}(undef, n, N_steps)
+    evals = Matrix{Float64}(undef, n, N_steps)  # uncertainties of the spline values
+    for l in eachindex(scaled_data)
+        yvals[l, :] = evaluate(y_splines[l], xs_eval)
+        # add small number to avoid division by zero
+        evals[l, :] = evaluate(e_splines[l], xs_eval) .+ 1e-6
     end
 
     # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
-    offset = minimum(yvals).val
-    for i in eachindex(yvals)
-        yvals[i] -= offset
-    end
-    norm_factor = maximum(yvals).val
-    for i in eachindex(yvals)
-        yvals[i] /= norm_factor
+    offset = minimum(yvals)
+    yvals .-= offset
+    norm_factor = maximum(yvals)
+    yvals ./= norm_factor
+    inv_norm = 1 / norm_factor
+
+    # The uncertainties were propagated with Measurements.jl before. The uncertainty of the
+    # mean sums the squared uncertainties in Measurements.jl's order, so that the quality
+    # does not change in the last digits.
+    ord = [1]
+    for k in 2:n
+        ord = [reverse(ord); k]
     end
 
     # calculate quality of the scaling
     S = 0.0
     for i in axes(yvals, 2)
+        y_sum = yvals[1, i]
+        for l in 2:n
+            y_sum += yvals[l, i]
+        end
+        y_mean = y_sum / n
+        e2_sum = 0.0
+        for l in ord
+            e2_sum += abs2(evals[l, i] * inv_norm)
+        end
+        e_mean = abs(1 / n * sqrt(e2_sum))
         for l in axes(yvals, 1)
-            y_mean = mean(yvals[:, i])
-            S += dp_densities[l] * (yvals[l, i].val - y_mean.val)^2 / (yvals[l, i].err^2 + y_mean.err^2)
+            e_l = abs(inv_norm * evals[l, i])
+            S += dp_densities[l] * (yvals[l, i] - y_mean)^2 / (e_l^2 + e_mean^2)
         end
     end
     S /= N_steps
