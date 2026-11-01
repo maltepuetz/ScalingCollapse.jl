@@ -3,9 +3,13 @@
 
 Quality function that interpolates all scaled data points to a single spline. The quality
 is then calculated as the sum of the squared differences between the data points and the
-interpolated values. The spline is fitted using the KissSmoothing.jl package. The number of
-knots can be specified using the `N_knots` keyword argument. If `N_knots` is not specified,
-the number of knots is set to `total_number_of_data_points / 10`.
+interpolated values. The spline is fitted using the KissSmoothing.jl package, only to the
+data points in the overlap interval of all system sizes (intersected with `dx`), i.e. the
+same points the quality is evaluated on. The knots are placed at evenly spaced quantiles of
+these points, so the spline keeps its flexibility when the scaling stretches or compresses
+the x axis. The number of knots can be specified using the `N_knots` keyword argument. If
+`N_knots` is not specified, the number of knots is set to
+`number_of_data_points_in_interval / 5`.
 """
 struct SingleSpline <: QualityFunction
     N_knots::Int
@@ -43,17 +47,22 @@ function (sqf::SingleSpline)(sp, parameters; check_bounds=false)
     # check whether the constructed optimization interval is valid
     interval[1] > interval[2] && return Inf
 
-    # collect all data points in a single array
+    # collect all data points in the interval -- fitting the spline to points outside of it
+    # would make its flexibility inside the interval depend on the scaling parameters
     xs = Float64[]
     ys = Float64[]
     es = Float64[]
     for d in scaled_data
         for i in eachindex(d.xs)
+            interval[1] <= d.xs[i] <= interval[2] || continue
             push!(xs, d.xs[i])
             push!(ys, d.ys[i])
             push!(es, d.es[i])
         end
     end
+
+    # the spline needs at least 2 knots and more data points than knots
+    length(xs) < 3 && return Inf
 
     # sort data points
     perm = sortperm(xs)
@@ -63,23 +72,23 @@ function (sqf::SingleSpline)(sp, parameters; check_bounds=false)
 
 
     # set N_knots
-    N_knots = sqf.N_knots != 0 ? sqf.N_knots : div(length(xs), 10, RoundUp)
+    N_knots = sqf.N_knots != 0 ? sqf.N_knots : div(length(xs), 5, RoundUp)
+    N_knots = clamp(N_knots, 2, length(xs) - 1)
 
 
-    # fit spline
-    knots = LinRange(xs[1], xs[end], N_knots)
+    # fit spline with knots at evenly spaced quantiles of the data
+    # (broadcast instead of a generator: a closure capturing the reassigned xs would box it)
+    knot_idxs = round.(Int, LinRange(0, 1, N_knots) .* (length(xs) - 1)) .+ 1
+    knots = unique(xs[knot_idxs])
+    length(knots) < 2 && return Inf
     spline = fit_nspline(xs, ys, knots)
-
-    # filter for data points in interval
-    mask = findall(x -> x < interval[2] && x > interval[1], xs)
-    isempty(mask) && return Inf
 
     if sp.errors_defined
         es = es .+ 1e-9  # add small number to avoid division by zero
-        S = sum(1 ./ (es[mask] .^ 2) .* (spline.(xs[mask]) .- ys[mask]) .^ 2) / length(mask)
+        S = sum(1 ./ (es .^ 2) .* (spline.(xs) .- ys) .^ 2) / length(xs)
         return S
     else
-        S = sum((spline.(xs[mask]) .- ys[mask]) .^ 2) / length(mask)
+        S = sum((spline.(xs) .- ys) .^ 2) / length(xs)
         return S
     end
 end
