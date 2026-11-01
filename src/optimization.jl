@@ -1,12 +1,13 @@
-function optimize_parameters!(sp)
+function optimize_parameters!(sp, starts=[sp.starting_ps])
 
     # scan parameter space
     if !sp.skip_scan
         parameter_scan!(sp)
+        starts = [sp.starting_ps]
     end
 
     # optimize parameters
-    optimize_starting_ps!(sp)
+    optimize_starting_ps!(sp, starts)
 
     return nothing
 end
@@ -66,20 +67,31 @@ function parameter_scan!(sp)
     return nothing
 end
 
-function optimize_starting_ps!(sp)
+# fit from each of the starting points and keep the fit with the lowest finite quality;
+# sp.starting_ps is set to the start of that fit
+function optimize_starting_ps!(sp, starts=[sp.starting_ps])
 
     sp.verbose && @info "Starting optimization of provided starting parameters..."
 
     # optimize starting parameters
     f = ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true))
-    result = optimize(f, sp.starting_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
+    result = nothing
+    for start in starts
+        r = optimize(f, start, _bounded_optimizer(sp, f), sp.optimizer_options)
+        if isfinite(r.minimum) && (isnothing(result) || r.minimum < result.minimum)
+            sp.starting_ps, result = start, r
+        end
+    end
 
-    isfinite(result.minimum) || error(
+    isnothing(result) && error(
         "The optimization did not find any parameters with a finite quality. Starting " *
-        "from $(sp.starting_ps), the rescaled data of the different system sizes do not " *
-        "overlap within the optimization interval dx (or contain too few points there). " *
-        "Check starting_ps, p_space and dx."
+        (length(starts) == 1 ? "from $(only(starts))" : "from any of $(starts)") *
+        ", the rescaled data of the different system sizes do not overlap within the " *
+        "optimization interval dx (or contain too few points there). Check starting_ps, " *
+        "p_space and dx."
     )
+    sp.verbose && length(starts) > 1 && @info "Best of $(length(starts)) starting " *
+                                              "points: $(sp.starting_ps)."
     if !Optim.converged(result) && sp.optimizer_options.show_warnings
         hint = if Optim.iteration_limit_reached(result)
             "Consider increasing the iteration limit via " *
