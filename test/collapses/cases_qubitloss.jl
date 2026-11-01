@@ -11,9 +11,10 @@ function load_qubitloss(theta_index, Ls)
     end
 end
 
-# the ScalingProblem call used in the paper
+# the ScalingProblem call used in the paper, with the relative form of x (relative=true, the
+# default up to version 0.2)
 const QUBITLOSS_KWARGS = (
-    sf=ScalingFunction(:x),
+    sf=ScalingFunction(:x; relative=true),
     dx=[-1.25, 1.25],
     p_space=[0.3:0.001:0.6, 1.2:0.1:1.8],
     error_threshold=1.3,
