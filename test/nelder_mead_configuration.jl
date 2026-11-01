@@ -168,10 +168,10 @@ end
 
         # the profile fits of T_c (a valley of width ~0.002) use its small step: a brute-force
         # profile over a fine T_c grid reaches 1.3 times the minimum at Δnu ≈ -0.033 and
-        # +0.027. The default simplex (step 0.25 in T_c) misses this valley and returns the
-        # conditional width 0.019 for nu. The window dx=[-2.27, 2.27] (≈ ±T_c) is the window
-        # [-1, 1] of the relative form; dx=[-1, 1] would be a window 2.27 times narrower and
-        # give a different fit.
+        # +0.027. The default simplex alone (step 0.25 in T_c) misses this valley; the inner
+        # fits of the default refit with steps of the conditional errors (error_methods.jl).
+        # The window dx=[-2.27, 2.27] (≈ ±T_c) is the window [-1, 1] of the relative form;
+        # dx=[-1, 1] would be a window 2.27 times narrower and give a different fit.
         kwargs = (sf=ScalingFunction(:x), starting_ps=[2.27, 1.0], dx=[-2.27, 2.27])
         sp_conditional = ScalingProblem(Ts, binder, Ls; kwargs..., error=:conditional)
         sp = ScalingProblem(Ts, binder, Ls; kwargs..., optimizer=step_optimizer([0.01, 0.05]))

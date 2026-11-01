@@ -54,6 +54,7 @@ sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x; p_names = ["T_c", "nu"]),
     dx = [-2.0, 2.0],
     p_space = [2.0:0.1:2.4, 0.5:0.1:1.5],
+    quality = MultipleSplines(),
     error = true,
 )
 ```

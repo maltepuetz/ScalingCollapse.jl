@@ -16,8 +16,9 @@ push!(CASES, CollapseCase(;
     kwargs=(sf=ScalingFunction(:x), p_space=[0.1:0.1:3, 0.1:0.1:3],
         dx=[-1.0, 1.0] .* (2 / log(1 + √2))),
     exact=Dict(1 => 2 / log(1 + √2), 2 => 1.0),
-    # measured: T_c = 2.26814 ± 0.00239 (|dev| 1.0e-3), ν = 0.9555 ± 0.0186 (|dev| 4.5e-2), both
-    # within 3σ, so δabs = 0; σmax ≈ 3× the fitted errors
+    # measured: T_c = 2.26814 ± 0.00239 (|dev| 1.0e-3, 0.4σ), ν = 0.9555 ± 0.0323 (|dev| 4.5e-2,
+    # 1.4σ), both within 3σ, so δabs = 0. σmax ≈ 3× the errors measured when σ(ν) was still the
+    # conditional 0.0186 (the inner fits missed the ~0.002 wide T_c valley); not changed since.
     σmax=Dict(1 => 7.2e-3, 2 => 5.6e-2),
     source="2D Ising Monte Carlo, Binder cumulant",
 ))
