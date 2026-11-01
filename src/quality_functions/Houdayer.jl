@@ -6,7 +6,24 @@ scaling. It is less stable than the spline methods and the Linear method and the
 recommended.
 
 # How does it work?
-TO BE DOCUMENTED
+Following Houdayer & Hartmann, Phys. Rev. B 70, 014418 (2004), for every scaled data point
+`(x_ij, y_ij)` of system size `i` in the overlap interval, the master curve is approximated
+by a weighted linear least-squares fit to the two data points of every other system size
+that bracket `x_ij`. With the fit value `Y_ij` and its variance `dY²_ij`, the quality is
+
+    S = 1/N Σ_ij (y_ij - Y_ij)² / (e_ij² + dY²_ij).
+
+If no error bars are given, all weights are set to 1.
+
+# Known bias
+The linear fit misses the curvature of the master curve between the bracketing points. The
+error this causes grows with the square of the spacing of the scaled data points, which is
+largest for the biggest system size. A larger `ν` compresses the scaled x axis, shrinks this
+spacing, and thereby lowers `S`, so on coarse data grids the fitted `ν` comes out too
+large. For example, on noise-free synthetic data with 4 sizes and 41 points each (only
+about 5 of the largest size lie in the interval), `ν` came out 2-3% too large; with 161
+points per size, 0.1%.
+The bias vanishes as the grid is refined. `Linear` and `MultipleSplines` do not show it.
 """
 struct Houdayer <: QualityFunction end
 
