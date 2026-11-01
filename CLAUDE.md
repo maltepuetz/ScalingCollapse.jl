@@ -12,10 +12,17 @@ ScalingCollapse.jl is a Julia package (Julia ≥ 1.9) for automatic finite-size 
 # Run the full test suite (includes Aqua.jl code-quality checks)
 julia --project=. -e 'using Pkg; Pkg.test()'
 
-# Build the docs locally (Documenter; output in docs/build/)
+# Build the docs locally (DocumenterVitepress; needs node/npm; output in docs/build/)
 julia --project=docs -e 'using Pkg; Pkg.develop(PackageSpec(path=pwd())); Pkg.instantiate()'
 julia --project=docs docs/make.jl
+
+# Live preview of the built site (from docs/)
+npm run docs:dev
 ```
+
+On Julia ≥ 1.11 `Pkg.develop` writes a `[sources]` entry with an **absolute** path into the tracked `docs/Project.toml`. Check `git diff docs/Project.toml` afterwards and revert it. A docs build also kills a running `vitepress dev` server, because it regenerates `docs/build/.documenter`; restart it with `npm run docs:dev`.
+
+`docs/src/.vitepress/config.mts` is **vendored** from DocumenterVitepress's template (same setup as QuditClifford.jl), so it is frozen at the version it was copied from. DocumenterVitepress substitutes its own copy only when this file is absent, and fills the `REPLACE_ME_DOCUMENTER_VITEPRESS*` placeholders in ours. On a DocumenterVitepress bump, diff it against `template/src/.vitepress/config.mts` of the new version and re-apply the two local changes named in its header: the navbar `logo` (the `logo-light.svg`/`logo-dark.svg` pair) and the favicon links plus the head script that picks between `favicon-light.ico` and `favicon-dark.ico`. Afterwards confirm that no `REPLACE_ME` is left in `docs/build/.documenter/.vitepress/config.mts`. The logo and favicons live in `docs/src/assets/`.
 
 Running a single test file: test files are `include`d from `test/runtests.jl`, which does `using ScalingCollapse, Test, Aqua, HDF5`. Test-only deps live in `test/Project.toml`. Data-driven tests open `testdata/IsingMonteCarlo.h5` via a path relative to `test/`, so the working directory must be `test/`. The easiest approach is a REPL using TestEnv.jl (`using TestEnv; TestEnv.activate()`), then `cd("test")`, `using ScalingCollapse, Test, HDF5`, `include("ising.jl")`. Alternatively, temporarily comment out includes in `runtests.jl`.
 

@@ -1,25 +1,33 @@
 using ScalingCollapse
 using Documenter
+using DocumenterVitepress
 
 DocMeta.setdocmeta!(ScalingCollapse, :DocTestSetup, :(using ScalingCollapse); recursive=true)
 
 makedocs(;
     modules=[ScalingCollapse],
     authors="Malte Pütz",
-    repo="https://github.com/maltepuetz/ScalingCollapse.jl/blob/{commit}{path}#{line}",
     sitename="ScalingCollapse.jl",
-    format=Documenter.HTML(;
-        prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://maltepuetz.github.io/ScalingCollapse.jl",
-        edit_link="main",
-        assets=String[],
+    checkdocs=:exports,
+    format=DocumenterVitepress.MarkdownVitepress(;
+        repo="github.com/maltepuetz/ScalingCollapse.jl",
+        devbranch="main",
+        devurl="dev",
+        deploy_url="https://maltepuetz.github.io/ScalingCollapse.jl",
     ),
     pages=[
         "Home" => "index.md",
+        "Manual" => [
+            "Getting Started" => "getting-started.md",
+        ],
+        "API Reference" => "api.md",
     ],
 )
 
-deploydocs(;
+DocumenterVitepress.deploydocs(;
     repo="github.com/maltepuetz/ScalingCollapse.jl",
+    target=joinpath(@__DIR__, "build"),
+    branch="gh-pages",
     devbranch="main",
+    push_preview=true,
 )
