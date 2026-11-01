@@ -11,6 +11,7 @@ export ScalingProblem
 export ScalingFunction
 export residuals
 export scaled_data
+export parameter_errors, parameter_errors!
 
 # export quality functions
 export MultipleSplines, SingleSpline, Linear, Houdayer
