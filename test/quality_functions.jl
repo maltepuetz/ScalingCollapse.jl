@@ -37,4 +37,46 @@
         # interior points: ybar(3) = 10, ybar(4) = 17 -> S = (1 + 1) / 2
         @test sp.quality(sp, [1.0, 1.0]) ≈ 1.0
     end
+
+    @testset "SingleSpline" begin
+        identity_sf = ScalingFunction((d, p1, p2) -> d; N_parameters=2)
+        spline_problem(xs, ys, Ls) = ScalingProblem(xs, ys, Ls;
+            sf=identity_sf, starting_ps=[1.0, 1.0], error=false, dx=[-10, 10],
+        )
+
+        # points outside the overlap interval do not change the fit
+        x1, x2 = [0.0, 2.0, 4.0, 6.0], [1.0, 3.0, 5.0, 7.0]
+        sp = spline_problem([x1, x2], [x1 .^ 2, x2 .^ 2], [1, 2])
+        x2_long = [1.0, 3.0, 5.0, 7.0, 8.0, 9.0]
+        sp_long = spline_problem([x1, x2_long], [x1 .^ 2, x2_long .^ 2], [1, 2])
+        for q in (SingleSpline(), SingleSpline(N_knots=3))
+            @test isfinite(q(sp, [1.0, 1.0]))
+            @test q(sp, [1.0, 1.0]) == q(sp_long, [1.0, 1.0])
+        end
+
+        # more knots than data points are capped at one less than the 6 points in (1, 6)
+        @test SingleSpline(N_knots=100)(sp, [1.0, 1.0]) == SingleSpline(N_knots=5)(sp, [1.0, 1.0])
+
+        # p1 shifts the scaled x values of size L by (L - 1) * p1, so the problems can be
+        # solved at p1 = 0 and the degenerate overlaps are reached by shifting
+        shift_sf = ScalingFunction(
+            (d, p1, p2) -> ScalingCollapse.Data(d.L, d.xs .+ (d.L - 1) * p1, d.ys, d.es);
+            N_parameters=2,
+        )
+        x = [0.0, 1.0, 2.0, 3.0, 4.0]
+        shift_problem(Ls) = ScalingProblem([x for _ in Ls], [x for _ in Ls], Ls;
+            sf=shift_sf, starting_ps=[0.0, 1.0], error=false, dx=[-10, 10],
+        )
+
+        # fewer than 3 points in the overlap interval: at p1 = 4 only x = 4 of both sizes
+        sp = shift_problem([1, 2])
+        @test isfinite(SingleSpline()(sp, [0.0, 1.0]))
+        @test SingleSpline()(sp, [4.0, 1.0]) == Inf
+
+        # at p1 = 2 the overlap interval is [4, 4], whose 3 points (one per size) put all
+        # knots at x = 4
+        sp = shift_problem([1, 2, 3])
+        @test isfinite(SingleSpline()(sp, [0.0, 1.0]))
+        @test SingleSpline()(sp, [2.0, 1.0]) == Inf
+    end
 end
