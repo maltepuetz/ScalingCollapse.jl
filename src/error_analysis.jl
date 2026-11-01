@@ -66,10 +66,14 @@ function _profile_errors!(sp; max_restarts::Int=3)
     sp.verbose && @info "Starting error analysis..."
     _has_valid_minimum(sp) || return nothing
 
+    # the conditional roots start the profile brackets and set the steps of the inner fits
+    roots = [_conditional_roots(sp, i) for i in eachindex(sp.optimal_ps)]
+    simplexes = _inner_simplexes(sp, first.(roots))
+
     # stop at the first parameter whose profile finds a better fit inside p_space
     lower = nothing
     for i in eachindex(sp.optimal_ps)
-        sp.optimal_ps_error[i], record = _profile_error(sp, i)
+        sp.optimal_ps_error[i], record = _profile_error(sp, i, roots[i], simplexes)
         if _found_lower(sp, record)
             lower = record
             break
@@ -117,17 +121,18 @@ function _reoptimize!(sp, ps, q)
     return nothing
 end
 
-# profile error of parameter i and the record of its profile evaluations
-function _profile_error(sp, i::Int)
+# Profile error of parameter i and the record of its profile evaluations, from its conditional
+# roots (deltas, f0) = _conditional_roots(sp, i); simplexes(nuisance) are the initial simplexes
+# of the inner fits of the parameters nuisance.
+function _profile_error(sp, i::Int, (deltas, f0), simplexes)
     record = _ProfileRecord(sp)
 
     # the conditional roots are the starting points of the profile brackets
-    deltas, f0 = _conditional_roots(sp, i)
     any(isnothing, deltas) && return _no_crossing_error(sp, i), record
 
     widths = Union{Nothing,Float64}[]
     for d in deltas
-        push!(widths, _profile_side(sp, i, d, f0; record))
+        push!(widths, _profile_side(sp, i, d, f0, simplexes; record))
         # the analysis is redone from a better fit (see _profile_errors!)
         _found_lower(sp, record) && return NaN, record
     end
@@ -158,7 +163,7 @@ end
 # the conditional root d, where the profile quality reaches error_threshold[i] times the
 # minimum. f0 = quality / minimum - error_threshold[i] at the fit. Returns nothing if no such
 # point is found, and adds the reason to record.failures.
-function _profile_side(sp, i::Int, d::Float64, f0::Float64;
+function _profile_side(sp, i::Int, d::Float64, f0::Float64, simplexes;
     record::_ProfileRecord=_ProfileRecord(sp))
 
     side = d < 0 ? "below" : "above"
@@ -175,7 +180,7 @@ function _profile_side(sp, i::Int, d::Float64, f0::Float64;
     # profile / minimum - threshold; NaN if the profile quality is invalid
     function f(x)
         warm = last(visited[argmin([abs(v[1] - x) for v in visited])])
-        q, nu, converged = _profile_value(sp, i, x, warm)
+        q, nu, converged = _profile_value(sp, i, x, warm, simplexes(nuisance))
         converged || (record.n_failed += 1)
         isfinite(q) || return NaN
         push!(visited, (x, nu))
@@ -235,8 +240,9 @@ end
 # parameters (kept inside their p_space bounds), starting from the better of the conditional
 # candidate (nuisance at the optimum) and the warm start. Returns the quality (Inf if invalid),
 # the nuisance values and whether the inner fit converged. The quality is never above either
-# candidate's quality, so the profile width is never below the conditional width.
-function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64})
+# candidate's quality, so the profile width is never below the conditional width. The inner fit
+# runs Nelder-Mead from each initial simplex of simplexes in turn.
+function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64}, simplexes)
     nuisance = _nuisance_indices(sp, i)
     lower = Float64[first(sp.p_space[j]) for j in nuisance]
     upper = Float64[last(sp.p_space[j]) for j in nuisance]
@@ -252,36 +258,62 @@ function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64})
     q_conditional = f(conditional)
     # the first profile point of each side starts from the optimum itself
     q_warm = isequal(warm, conditional) ? q_conditional : f(warm)
-    start_conditional = q_conditional <= q_warm
-    q, nu = start_conditional ? (q_conditional, conditional) : (q_warm, copy(warm))
+    q, nu = q_conditional <= q_warm ? (q_conditional, conditional) : (q_warm, copy(warm))
     # no finite starting point: the point is invalid
     isfinite(q) || return Inf, nu, true
 
-    optimizer = Optim.NelderMead(
-        BoundedSimplexer(_restrict_simplexer(sp.optimizer.initial_simplex, nuisance),
-            lower, upper, f),
-        sp.optimizer.parameters,
-    )
-    result = optimize(f, copy(nu), optimizer, sp.optimizer_options)
-    converged = Optim.converged(result)
-    if !converged
-        # retry once from the conditional candidate (from where the first fit stopped, if it
-        # already started there)
-        retry_start = start_conditional ? copy(Optim.minimizer(result)) : copy(conditional)
+    # one Nelder-Mead fit per initial simplex, each from the best point so far
+    converged = true
+    for simplex in simplexes
+        optimizer = Optim.NelderMead(
+            BoundedSimplexer(simplex, lower, upper, f),
+            sp.optimizer.parameters,
+        )
+        start = nu
+        result = optimize(f, copy(start), optimizer, sp.optimizer_options)
+        if !Optim.converged(result)
+            # retry once from the conditional candidate (from where the fit stopped, if it
+            # already started there)
+            retry_start = isequal(start, conditional) ? copy(Optim.minimizer(result)) :
+                          copy(conditional)
+            if Optim.minimum(result) < q
+                q, nu = Optim.minimum(result), copy(Optim.minimizer(result))
+            end
+            result = optimize(f, retry_start, optimizer, sp.optimizer_options)
+        end
+        converged &= Optim.converged(result)
         if Optim.minimum(result) < q
             q, nu = Optim.minimum(result), copy(Optim.minimizer(result))
         end
-        result = optimize(f, retry_start, optimizer, sp.optimizer_options)
-        converged = Optim.converged(result)
-    end
-    if Optim.minimum(result) < q
-        q, nu = Optim.minimum(result), copy(Optim.minimizer(result))
     end
 
     return q, nu, converged
 end
 
 _nuisance_indices(sp, i) = [j for j in eachindex(sp.optimal_ps) if j != i]
+
+# Initial simplexes of the inner fits, as a function of the nuisance indices. An affine simplex
+# (the default Optim.AffineSimplexer(a=0.025, b=0.1)) moves every parameter by b * p + a,
+# which follows the value of the parameter, not the width of its quality valley: with steps
+# much larger than a narrow valley, the inner fit stays at its starting point and the profile
+# width falls back to the conditional one. After the fit with the affine simplex, the inner
+# fit is therefore refined with one step per nuisance parameter j equal to its conditional
+# error, the larger of its conditional roots deltas[j] (the affine step if it has none). The
+# affine fit comes first because the quality can have small local minima: its large steps find
+# lower valleys a few conditional widths away, which the small steps alone would miss. Any
+# other simplexer (e.g. StepSimplexer) is used alone, restricted to the nuisance parameters.
+function _inner_simplexes(sp, deltas)
+    simplex = sp.optimizer.initial_simplex
+    simplex isa Optim.AffineSimplexer ||
+        return nuisance -> [_restrict_simplexer(simplex, nuisance)]
+    steps = map(eachindex(sp.optimal_ps)) do j
+        roots = [abs(d) for d in deltas[j] if !isnothing(d)]
+        isempty(roots) || return maximum(roots)
+        step = simplex.b * sp.optimal_ps[j] + simplex.a
+        return iszero(step) ? simplex.a : step
+    end
+    return nuisance -> [simplex, StepSimplexer(steps[nuisance])]
+end
 
 function _conditional_errors!(sp)
 

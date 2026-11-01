@@ -14,6 +14,9 @@ Base.@kwdef mutable struct ErrorHarness
     optimizer_options = ScalingCollapse.Optim.Options()
 end
 
+# a user-defined initial simplex (the fixed vertices do not matter here)
+struct UserSimplexer <: ScalingCollapse.Optim.Simplexer end
+
 @testset "error methods" begin
     # Fixtures recorded on main before the profile-error work: the default error of that time is
     # now `error=:conditional`. Compared with rtol (not ==) because the literals come from one
@@ -174,7 +177,11 @@ end
             kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
                 p_space=[2.0:0.1:2.4, 0.5:0.1:1.5], dx=[-2.0, 2.0])
             sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
-            sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
+            # compared at the same fit: the profile re-optimizes it here (it finds a lower
+            # quality at nu ≈ 0.90)
+            sp_conditional = ScalingProblem(Ts, binder, Ls; kw...,
+                starting_ps=sp_profile.optimal_ps, error=:conditional)
+            @test sp_conditional.optimal_ps ≈ sp_profile.optimal_ps
             @test at_least_conditional(sp_profile.optimal_ps_error,
                 sp_conditional.optimal_ps_error)
         end
@@ -186,6 +193,36 @@ end
             sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
             @test at_least_conditional(sp_profile.optimal_ps_error,
                 sp_conditional.optimal_ps_error)
+            # The T_c valley at fixed nu is ~0.002 wide, far below the default affine step of
+            # ~0.25: with it alone, the inner fits stayed at the conditional point and σ(nu) was
+            # the conditional 0.0215. Brute-force profile (dense grids around the conditional and
+            # warm starts with Brent refinement, plus polished affine multi-starts; bisected
+            # crossings): σ(T_c) = 0.002158 (lower side; above T_c the profile runs into a
+            # degenerate nu ≈ 0.55 valley with a quality below the minimum before it reaches the
+            # threshold) and σ(nu) = 0.03367 (the inner fits land 1.5% lower on the rugged
+            # quality).
+            @test isapprox(sp_profile.optimal_ps_error, [0.002158, 0.03367]; rtol=0.03)
+        end
+
+        @testset "initial simplexes of the inner fits" begin
+            quality = (sp, ps; check_bounds=false) -> 1 + sum(abs2, ps)
+            deltas = [(-0.1, 0.2), (nothing, -0.3), (nothing, nothing)]
+            # an affine simplex is followed by steps of the conditional errors (the affine
+            # step b * p + a without conditional roots)
+            affine = ScalingCollapse.Optim.AffineSimplexer(a=0.025, b=0.1)
+            sp = ErrorHarness(; quality, optimal_ps=[1.0, 2.0, 3.0],
+                optimizer=ScalingCollapse.Optim.NelderMead(initial_simplex=affine))
+            simplexes = ScalingCollapse._inner_simplexes(sp, deltas)
+            @test first(simplexes([1, 2, 3])) === affine
+            @test last(simplexes([1, 2, 3])).steps ≈ [0.2, 0.3, 0.325]
+            @test last(simplexes([2])).steps ≈ [0.3]
+            # any other simplexer is used alone, restricted to the re-fitted parameters
+            sp.optimizer = ScalingCollapse.Optim.NelderMead(
+                initial_simplex=StepSimplexer([0.01, 0.02, 0.03]))
+            simplexes = ScalingCollapse._inner_simplexes(sp, deltas)
+            @test only(simplexes([1, 3])).steps == [0.01, 0.03]
+            sp.optimizer = ScalingCollapse.Optim.NelderMead(initial_simplex=UserSimplexer())
+            @test only(ScalingCollapse._inner_simplexes(sp, deltas)([1, 2])) isa UserSimplexer
         end
 
         @testset "fixed parameter" begin
