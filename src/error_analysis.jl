@@ -1,8 +1,9 @@
-function error_analysis!(sp; max_restarts::Int=3)
+# refit=false throws instead of re-optimizing when the profile finds a lower quality
+function error_analysis!(sp; max_restarts::Int=3, refit::Bool=true)
     if sp.error === :conditional
         _conditional_errors!(sp)
     elseif sp.error === :profile
-        _profile_errors!(sp; max_restarts)
+        _profile_errors!(sp; max_restarts, refit)
     elseif sp.error === :bootstrap
         _bootstrap_errors!(sp)
     else
@@ -58,7 +59,7 @@ function _warn_profile_failure(p_name, threshold, reason, sides)
     return nothing
 end
 
-function _profile_errors!(sp; max_restarts::Int=3)
+function _profile_errors!(sp; max_restarts::Int=3, refit::Bool=true)
 
     # with one free parameter, the profile is the plain quality
     length(sp.optimal_ps) == 1 && return _conditional_errors!(sp)
@@ -78,6 +79,12 @@ function _profile_errors!(sp; max_restarts::Int=3)
 
     if !isnothing(lower)
         old_minimum = sp.minimum
+        refit || error(
+            "The error analysis found a quality $(lower.lowest_q) at the parameters " *
+            "$(lower.lowest_ps), lower than the minimum $(old_minimum) at the optimal " *
+            "parameters $(sp.optimal_ps), so the fit is not at a minimum. Use " *
+            "parameter_errors! to re-optimize the fit and compute the errors there."
+        )
         if max_restarts > 0
             # re-optimize from the better point and redo the analysis from scratch
             _reoptimize!(sp, lower.lowest_ps, lower.lowest_q)
@@ -85,7 +92,7 @@ function _profile_errors!(sp; max_restarts::Int=3)
                   "re-optimized, which moves the minimum from $(old_minimum) to " *
                   "$(sp.minimum) (optimal parameters $(sp.optimal_ps)), and the error " *
                   "analysis is restarted."
-            return _profile_errors!(sp; max_restarts=max_restarts - 1)
+            return _profile_errors!(sp; max_restarts=max_restarts - 1, refit)
         end
         sp.optimal_ps = lower.lowest_ps
         sp.minimum = lower.lowest_q

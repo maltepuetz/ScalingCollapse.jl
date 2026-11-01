@@ -291,18 +291,7 @@ mutable struct ScalingProblem
         starting_ps = first(starts)
         quality_scan = get(kwargs, :quality_scan, MultipleSplines(scan_mode=true))
         quality = get(kwargs, :quality, Linear())
-        error_threshold = get(kwargs, :error_threshold, 1.3 .* ones(n_ps))
-        if !isa(error_threshold, Vector)
-            error_threshold = error_threshold .* ones(n_ps)
-        end
-        length(error_threshold) == n_ps || throw(ArgumentError(
-            "error_threshold has $(length(error_threshold)) entries, but the scaling " *
-            "function has $(n_ps) free parameters $(scaled_p_names(sf))."
-        ))
-        all(>(1), error_threshold) || throw(ArgumentError(
-            "error_threshold must be larger than 1 (it is the factor by which the " *
-            "quality function may increase), got $(error_threshold)."
-        ))
+        error_threshold = _check_error_threshold(get(kwargs, :error_threshold, 1.3), sf)
         (length(dx) == 2 && dx[1] < dx[2]) || throw(ArgumentError(
             "dx must be an interval [x_min, x_max] with x_min < x_max, got $(dx)."
         ))
@@ -325,14 +314,8 @@ mutable struct ScalingProblem
         optimizer_options isa Optim.Options || throw(
             ArgumentError("optimizer_options must be an Optim.Options instance"),
         )
-        n_bootstrap = get(kwargs, :n_bootstrap, 100)
-        (n_bootstrap isa Integer && n_bootstrap >= 2) || throw(ArgumentError(
-            "n_bootstrap must be an integer of at least 2, got $(repr(n_bootstrap))."
-        ))
-        rng = get(kwargs, :rng, Random.default_rng())
-        rng isa AbstractRNG || throw(ArgumentError(
-            "rng must be an AbstractRNG (e.g. Random.Xoshiro(seed)), got $(typeof(rng))."
-        ))
+        n_bootstrap = _check_n_bootstrap(get(kwargs, :n_bootstrap, 100))
+        rng = _check_rng(get(kwargs, :rng, Random.default_rng()))
 
         length(p_space) == n_ps || throw(ArgumentError(
             "p_space has $(length(p_space)) entries, but the scaling function has " *
@@ -360,10 +343,7 @@ mutable struct ScalingProblem
                 break
             end
         end
-        (error === :bootstrap && !errors_defined) && throw(ArgumentError(
-            "error=:bootstrap resamples the y values within their error bars, but the data " *
-            "have no error bars. Pass y errors `es` or Measurement y values."
-        ))
+        _check_bootstrap_data(error, errors_defined)
 
         # construct unsolved ScalingProblem
         optimal_ps = zeros(n_parameters(sf))
@@ -517,6 +497,131 @@ function _error_method(x)
         "error must be one of true, false, :profile, :conditional, :bootstrap, got " *
         "$(repr(x))."
     ))
+end
+
+# error_threshold as one Float64 per free parameter (a number applies to all of them)
+function _check_error_threshold(error_threshold, sf)
+    n_ps = n_parameters(sf)
+    if !isa(error_threshold, Vector)
+        error_threshold = error_threshold .* ones(n_ps)
+    end
+    length(error_threshold) == n_ps || throw(ArgumentError(
+        "error_threshold has $(length(error_threshold)) entries, but the scaling " *
+        "function has $(n_ps) free parameters $(scaled_p_names(sf))."
+    ))
+    all(>(1), error_threshold) || throw(ArgumentError(
+        "error_threshold must be larger than 1 (it is the factor by which the " *
+        "quality function may increase), got $(error_threshold)."
+    ))
+    return Float64.(error_threshold)
+end
+
+function _check_n_bootstrap(n_bootstrap)
+    (n_bootstrap isa Integer && n_bootstrap >= 2) || throw(ArgumentError(
+        "n_bootstrap must be an integer of at least 2, got $(repr(n_bootstrap))."
+    ))
+    return n_bootstrap
+end
+
+function _check_rng(rng)
+    rng isa AbstractRNG || throw(ArgumentError(
+        "rng must be an AbstractRNG (e.g. Random.Xoshiro(seed)), got $(typeof(rng))."
+    ))
+    return rng
+end
+
+function _check_bootstrap_data(error, errors_defined)
+    (error === :bootstrap && !errors_defined) && throw(ArgumentError(
+        "error=:bootstrap resamples the y values within their error bars, but the data " *
+        "have no error bars. Pass y errors `es` or Measurement y values."
+    ))
+    return nothing
+end
+
+
+"""
+    parameter_errors(sp::ScalingProblem; method, error_threshold, n_bootstrap, rng)
+
+Compute the errors of the optimal parameters of the solved problem `sp` without changing
+`sp`, e.g. with another method than the one `sp` was constructed with, or after a fit with
+`error=false`. Returns one error per free parameter (in the order of `scaled_p_names(sp.sf)`).
+
+The keywords are those of the `ScalingProblem` constructor and default to the values stored
+in `sp`; `method` takes the values of its `error` keyword except `false` (default: `sp.error`,
+or `:profile` if `sp` was fitted with `error=false`). The analysis uses the optimizer settings
+of `sp`. The bootstrap (`method=:bootstrap`) draws from `rng`, which advances it (`sp.rng` by
+default); pass a seeded one, e.g. `rng=Random.Xoshiro(1)`, for reproducible errors. With the
+same `rng` state, the errors equal those of a problem constructed with the same keywords.
+
+The profile (`method=:profile`) can find a quality lower than `sp.minimum`, which means that
+`sp` is not at a minimum. `parameter_errors` then throws an `ErrorException`; use
+[`parameter_errors!`](@ref) to re-optimize the fit and compute the errors there.
+
+# Examples
+```julia
+sp = ScalingProblem(xs, ys, es, Ls; error=false)
+σ_profile = parameter_errors(sp)
+σ_bootstrap = parameter_errors(sp; method=:bootstrap, n_bootstrap=500, rng=Random.Xoshiro(1))
+```
+"""
+function parameter_errors(sp::ScalingProblem; kwargs...)
+    work = _error_problem(sp; kwargs...)
+    error_analysis!(work; refit=false)
+    return work.optimal_ps_error
+end
+
+"""
+    parameter_errors!(sp::ScalingProblem; method, error_threshold, n_bootstrap, rng)
+
+Like [`parameter_errors`](@ref), but store the errors in `sp.optimal_ps_error` and the
+keywords in `sp` (`method` in `sp.error`), as if `sp` had been constructed with them. If the
+profile finds a quality lower than the minimum, the fit is re-optimized from there with a
+warning, so `sp.optimal_ps` and `sp.minimum` can change, as in the constructor. Returns a
+copy of the errors.
+"""
+function parameter_errors!(sp::ScalingProblem; kwargs...)
+    work = _error_problem(sp; kwargs...)
+    sp.error, sp.error_threshold = work.error, work.error_threshold
+    sp.n_bootstrap, sp.rng = work.n_bootstrap, work.rng
+    error_analysis!(sp)
+    return copy(sp.optimal_ps_error)
+end
+
+# copy of sp with the given error settings (validated as in the constructor), whose fit
+# results can change without changing sp
+function _error_problem(sp::ScalingProblem;
+    method=(sp.error === :none ? :profile : sp.error),
+    error_threshold=sp.error_threshold,
+    n_bootstrap=sp.n_bootstrap,
+    rng=sp.rng,
+)
+    error = _error_method(method)
+    error === :none && throw(ArgumentError(
+        "method must be one of true, :profile, :conditional, :bootstrap, got $(repr(method))."
+    ))
+    _check_bootstrap_data(error, sp.errors_defined)
+    return ScalingProblem(
+        sp.data,
+        sp.sf,
+        sp.p_space,
+        sp.dx,
+        copy(sp.optimal_ps),
+        copy(sp.optimal_ps_error),
+        sp.minimum,
+        sp.solved,
+        sp.verbose,
+        error,
+        sp.quality_scan,
+        sp.quality,
+        sp.skip_scan,
+        copy(sp.starting_ps),
+        sp.errors_defined,
+        _check_error_threshold(error_threshold, sp.sf),
+        sp.optimizer,
+        sp.optimizer_options,
+        _check_n_bootstrap(n_bootstrap),
+        _check_rng(rng),
+    )
 end
 
 
