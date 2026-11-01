@@ -67,7 +67,10 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `rng::AbstractRNG=Random.default_rng()`: random number generator for `error=:bootstrap`;
     pass a seeded one (e.g. `Random.Xoshiro(42)`) for reproducible errors.
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
-    initial simplex and adaptive or fixed algorithm parameters.
+    initial simplex and adaptive or fixed algorithm parameters. The default initial simplex
+    `Optim.AffineSimplexer(a=0.025, b=0.1)` moves every parameter by `0.1 * p + 0.025`; for
+    parameters on very different scales, use `StepSimplexer` with one step per free
+    parameter.
 - `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
     including tolerances, iteration and function-call limits, callbacks, tracing, and
     warnings.
@@ -151,6 +154,14 @@ ScalingProblem(xs, ys, Ls;
     starting_ps=[2.27, 1.0],
     optimizer=optimizer,
     optimizer_options=optimizer_options,
+)
+
+# one initial step per free parameter (here T_c and nu), e.g. of the order of their errors
+optimizer = ScalingCollapse.Optim.NelderMead(initial_simplex=StepSimplexer([0.002, 0.05]))
+ScalingProblem(xs, ys, Ls;
+    sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
+    p_space=[2.2:0.01:2.35, 0.5:0.1:1.5],
+    optimizer=optimizer,
 )
 ```
 
@@ -302,6 +313,13 @@ mutable struct ScalingProblem
         )
         optimizer isa Optim.NelderMead || throw(
             ArgumentError("optimizer must be an Optim.NelderMead instance"),
+        )
+        simplex = optimizer.initial_simplex
+        (!(simplex isa StepSimplexer) || length(simplex.steps) == n_ps) || throw(
+            ArgumentError(
+                "The StepSimplexer of the optimizer has $(length(simplex.steps)) steps, " *
+                "but the scaling function has $(n_ps) free parameters $(scaled_p_names(sf))."
+            ),
         )
         optimizer_options = get(kwargs, :optimizer_options, Optim.Options())
         optimizer_options isa Optim.Options || throw(
