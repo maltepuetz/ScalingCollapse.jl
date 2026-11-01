@@ -9,10 +9,10 @@ To find the best parameters for a finite size scaling analysis, we need to creat
 using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x),
-    dx = [-1.0, 1.0],
+    dx = [-2.0, 2.0],
 )
 ```
-The kwarg `sf` is used to set the scaling function. In this case we use the scaling function preset `:x` which only rescales the x-axis as `x -> (x - p1)/p1 * L^(1/p2)`. We can also give the parameters custom names by passing the kwarg `p_names::Vector{String}` to the `ScalingFunction` constructor.
+The kwarg `sf` is used to set the scaling function. In this case we use the scaling function preset `:x` which only rescales the x-axis as `x -> (x - p1) * L^(1/p2)`. We can also give the parameters custom names by passing the kwarg `p_names::Vector{String}` to the `ScalingFunction` constructor.
 We use the kwarg `dx` to limit the optimization to a fixed interval because powerlaw dependece is usually only accurate close to the critical point. The default value is `dx = [-Inf, Inf]`.
 Other kwargs are:
 - `p_space = [0.1:0.1:3.0 for _ in 1:n_parameters(sf)]` This sets the parameter space that will be scanned for local minima of the cost function. The optimization algorithm will start from the determined local minima to find the global minimum. Note that the the optimal parameters should lie within the given parameter space. Also note, that the initial scan can take a while for too small stepsizes. If you have a good idea where the optimal parameters should lie, you can set the parameter space accordingly. You can also skip the local minima search completely, by setting the kwarg `starting_ps`.
@@ -22,9 +22,11 @@ Other kwargs are:
 - `verbose::Bool=false` This kwarg can be used to turn the verbose output on or off. If `verbose=true`, the algorithm will print some information about the optimization process.
 
 There are also other preset ScalingFunctions:
-- `:x` Rescales the x-axis as `x -> (x - p1)/p1 * L^(1/p2)`.
-- `:xy` This is the default scaling function. It rescales the x-axis as `x -> (x - p1)/p1 * L^(1/p2)` and the y-axis as `y -> y * L^(p3/p2)`.
+- `:x` Rescales the x-axis as `x -> (x - p1) * L^(1/p2)`.
+- `:xy` This is the default scaling function. It rescales the x-axis as `x -> (x - p1) * L^(1/p2)` and the y-axis as `y -> y * L^(p3/p2)`.
 - `:xny` This scaling function is similar to `:xy` but it rescales the y-axis as `y -> y * L^(-p3/p2)`. In this case the critical exponent `p3` has a negative sign.
+
+Pass `relative = true` to rescale the x-axis relative to `p1` instead, as `x -> (x - p1)/p1 * L^(1/p2)` (e.g. with the reduced temperature `(T - T_c)/T_c`): `ScalingFunction(:x; p_names = ["T_c", "nu"], relative = true)`. This was the default up to version 0.2. A window `dx` of the relative form corresponds to `dx .* p1` in the default form, so to reproduce an old fit either pass `relative = true` or multiply `dx` by the critical point. The default form also works for `p1 = 0` or `p1 < 0`.
 
 Note that you can also create your own scaling function! We can make our scaling function looking a little bit cooler by giving our parameters custom names with the kwarg `p_names::Vector{String}`. 
 
@@ -33,7 +35,7 @@ Now that we know the basics, let us solve another scaling problem. This time we 
 using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x; p_names = ["T_c", "nu"]),
-    dx = [-1.0, 1.0],
+    dx = [-2.0, 2.0],
     p_space = [2.0:0.1:2.4, 0.5:0.1:1.5],
     error = true,
 )
@@ -45,7 +47,7 @@ Let's say that we know from our statistical mechanics course that the critical e
 using ScalingCollapse
 sp = ScalingProblem(Ts, binder, Ls;
     sf = ScalingFunction(:x; p_names = ["T_c", "nu"], nu=1),
-    dx = [-1.0, 1.0],
+    dx = [-2.0, 2.0],
     p_space = [2.0:0.1:2.4],
     error = true,
 )
