@@ -7,6 +7,7 @@
 # MultipleSplines); all others are below 1.1σ.
 # Houdayer's ν lies 2–3% above the truth on these coarse grids; this is the grid-spacing bias
 # of the method, see the `Houdayer` docstring.
+# The window dx = [-1.05, 1.05] is [-1.5, 1.5] of the relative form of the generator, times x_c.
 using HDF5
 
 function load_synthetic(variant)
@@ -79,10 +80,10 @@ const SYNTHETIC_VARIANTS = [
 function synthetic_kwargs(variant, preset, quality)
     if variant == "fixed_nu"
         return (sf=ScalingFunction(:xy; p2=1.2), p_space=[0.5:0.01:0.9, 0.0:0.05:0.6],
-            dx=[-1.5, 1.5], quality=quality())
+            dx=[-1.05, 1.05], quality=quality())
     end
     p_space = [0.5:0.01:0.9, 0.6:0.1:2.0, 0.0:0.05:0.6][1:(preset === :x ? 2 : 3)]
-    return (sf=ScalingFunction(preset), p_space=p_space, dx=[-1.5, 1.5], quality=quality())
+    return (sf=ScalingFunction(preset), p_space=p_space, dx=[-1.05, 1.05], quality=quality())
 end
 
 for (variant, (preset, truth)) in SYNTHETIC_VARIANTS, (qname, quality) in SYNTHETIC_QUALITIES

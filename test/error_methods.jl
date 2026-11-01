@@ -17,11 +17,12 @@ end
 @testset "error methods" begin
     # Fixtures recorded on main before the profile-error work: the default error of that time is
     # now `error=:conditional`. Compared with rtol (not ==) because the literals come from one
-    # machine and CI also runs aarch64 and 32-bit.
+    # machine and CI also runs aarch64 and 32-bit. The fixtures use the relative form of x, the
+    # default of that time.
     @testset "conditional errors unchanged" begin
         # README Ising fit (Ts, binder, Ls come from ising.jl)
         sp = ScalingProblem(Ts, binder, Ls;
-            sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
+            sf=ScalingFunction(:x; p_names=["T_c", "nu"], relative=true),
             p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
             dx=[-1.0, 1.0],
             error=:conditional,
@@ -34,7 +35,7 @@ end
             [Y_L4, Y_L6, Y_L8, Y_L10, Y_L12],
             [E_L4, E_L6, E_L8, E_L10, E_L12],
             [4, 6, 8, 10, 12];
-            sf=ScalingFunction(:xny, p_names=["x_c", "nu", "gamma"], nu=1),
+            sf=ScalingFunction(:xny, p_names=["x_c", "nu", "gamma"], nu=1, relative=true),
             p_space=[5:0.1:7, 1:0.1:3],
             dx=[-2, 2],
             error=:conditional,
@@ -46,7 +47,7 @@ end
             Lb = read(h, "Ls")
             xs, ys, es = ([read(h, "strength/L$L/$v") for L in Lb] for v in ("x", "y", "e"))
             sp = ScalingProblem(xs, ys, es, Lb;
-                sf=ScalingFunction(:xy),
+                sf=ScalingFunction(:xy; relative=true),
                 p_space=[0.48:0.002:0.52, 0.8:0.1:2.0, 0.05:0.025:0.3],
                 dx=[-1.0, 1.0],
                 error=:conditional,
@@ -62,7 +63,7 @@ end
             xs = [read(g, "L$L/x") for L in Ls_syn]
             ys = [read(g, "L$L/y") for L in Ls_syn]
             sp = ScalingProblem(xs, ys, Ls_syn;
-                sf=ScalingFunction(:xy),
+                sf=ScalingFunction(:xy; relative=true),
                 p_space=[0.5:0.01:0.9, 0.6:0.1:2.0, 0.0:0.05:0.6],
                 dx=[-1.5, 1.5],
                 quality=Linear(),
@@ -74,7 +75,7 @@ end
     end
 
     @testset "error keyword" begin
-        kw = (sf=ScalingFunction(:x), dx=[-1.0, 1.0], p_space=[2.0:0.1:2.4, 0.5:0.1:1.5])
+        kw = (sf=ScalingFunction(:x), dx=[-2.0, 2.0], p_space=[2.0:0.1:2.4, 0.5:0.1:1.5])
         @test_throws ArgumentError ScalingProblem(Ts, binder, Ls; kw..., error=:bogus)
 
         sp = ScalingProblem(Ts, binder, Ls; kw..., error=false)
@@ -101,7 +102,7 @@ end
 
         @testset "one free parameter" begin
             kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"], nu=1),
-                p_space=[2.0:0.1:2.4], dx=[-1.0, 1.0])
+                p_space=[2.0:0.1:2.4], dx=[-2.0, 2.0])
             sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
             sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
             @test sp_profile.optimal_ps_error == sp_conditional.optimal_ps_error
@@ -171,7 +172,7 @@ end
 
         @testset "profile ≥ conditional" begin
             kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
-                p_space=[2.0:0.1:2.4, 0.5:0.1:1.5], dx=[-1.0, 1.0])
+                p_space=[2.0:0.1:2.4, 0.5:0.1:1.5], dx=[-2.0, 2.0])
             sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
             sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
             @test at_least_conditional(sp_profile.optimal_ps_error,
@@ -180,7 +181,7 @@ end
 
         @testset "profile with starting_ps" begin
             kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
-                starting_ps=[2.27, 1.0], dx=[-1.0, 1.0])
+                starting_ps=[2.27, 1.0], dx=[-2.0, 2.0])
             sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
             sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
             @test at_least_conditional(sp_profile.optimal_ps_error,
@@ -196,7 +197,7 @@ end
                 [4, 6, 8, 10, 12];
                 sf=ScalingFunction(:xny, p_names=["x_c", "nu", "gamma"], nu=1),
                 p_space=[5:0.1:7, 1:0.1:3],
-                dx=[-2, 2],
+                dx=[-12, 12],
                 error,
             )
             @test at_least_conditional(fit(:profile).optimal_ps_error,

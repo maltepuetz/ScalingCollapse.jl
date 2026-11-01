@@ -1,5 +1,6 @@
 # CDW transition in the square lattice Holstein model
 # (data source: https://owenpb.github.io/FiniteSizeScaling.jl/stable/demo_1/)
+# dx = [-12, 12] is the window [-2, 2] of the relative form (x - x_c)/x_c * L^(1/nu), times x_c ≈ 6
 
 include("testdata/cdw_holstein.jl")
 
@@ -17,7 +18,7 @@ include("testdata/cdw_holstein.jl")
             gamma=1.75
         ),
         p_space=[0.1:0.1:10],
-        dx=[-2, 2],
+        dx=[-12, 12],
     )
     @test isapprox(sp.optimal_ps[1], 6.0; atol=0.1)
     @test try
@@ -39,7 +40,7 @@ include("testdata/cdw_holstein.jl")
             #gamma=1.75
         ),
         p_space=[5:0.1:7, 1:0.1:3],
-        dx=[-2, 2],
+        dx=[-12, 12],
     )
     @test isapprox(sp.optimal_ps[1], 6.0; atol=0.2)
     @test isapprox(sp.optimal_ps[2], 1.75; atol=0.1)
@@ -56,7 +57,7 @@ include("testdata/cdw_holstein.jl")
             #gamma=1.75
         ),
         p_space=[5:0.1:7, 1:0.1:3],
-        dx=[-2, 2],
+        dx=[-12, 12],
         quality=Houdayer()
     )
     @test isapprox(sp.optimal_ps[1], 6.0; atol=0.2)
@@ -73,7 +74,7 @@ include("testdata/cdw_holstein.jl")
             #gamma=1.75
         ),
         p_space=[5:0.1:7, 1:0.1:3],
-        dx=[-2, 2],
+        dx=[-12, 12],
         quality=MultipleSplines()
     )
     @test isapprox(sp.optimal_ps[1], 6.0; atol=0.2)

@@ -19,7 +19,7 @@
         # ScalingFunction kwargs are still forwarded to the default ScalingFunction
         sp = ScalingProblem(Ts, binder, Ls;
             p_names=["T_c", "nu"],
-            dx=[-1.0, 1.0],
+            dx=[-2.0, 2.0],
             starting_ps=[2.27, 1.0],
             error=false,
         )
@@ -74,7 +74,7 @@
 
     @testset "residuals without valid errors" begin
         sp = ScalingProblem(Ts, binder, Ls;
-            sf=ScalingFunction(:x), dx=[-1.0, 1.0], starting_ps=[2.27, 1.0], error=false,
+            sf=ScalingFunction(:x), dx=[-2.0, 2.0], starting_ps=[2.27, 1.0], error=false,
         )
         @test_throws ArgumentError residuals(sp; N_steps=3)
         sp.optimal_ps_error .= NaN
@@ -134,7 +134,7 @@
             p_names=["T_c", "dummy"],
         )
         err = @test_throws ErrorException ScalingProblem(Ts, binder, Ls;
-            sf=sf, dx=[-1.0, 1.0], p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
+            sf=sf, dx=[-2.0, 2.0], p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
         )
         @test occursin("along dummy.", err.value.msg)
 

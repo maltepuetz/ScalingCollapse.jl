@@ -8,6 +8,8 @@ susceptibility = read(file, "susceptibility")
 close(file)
 @info "Done. Starting tests..."
 
+# dx = [-2.27, 2.27] (and [-2.27, 5.0]) are the windows [-1, 1] (and [-1, 2.2]) of the relative
+# form (T - T_c)/T_c * L^(1/nu), the default up to version 0.2, times T_c
 @testset "Ising model 2D" begin
     @testset "Binder cumulant" begin
 
@@ -18,7 +20,7 @@ close(file)
         sp = ScalingCollapse.ScalingProblem(_Ts, _binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x),
             p_space=[0.1:0.1:3, 0.1:0.1:3],
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
@@ -28,7 +30,7 @@ close(file)
         sp = ScalingCollapse.ScalingProblem(_Ts, _binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x),
             p_space=[0.1:0.1:3, 0.1:0.1:3],
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             quality=SingleSpline(),
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
@@ -39,7 +41,7 @@ close(file)
         sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
             p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
-            dx=[-1.0, 1.0],
+            dx=[-2.0, 2.0],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
@@ -55,7 +57,7 @@ close(file)
 
         sp = ScalingCollapse.ScalingProblem(_Ts, _binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x, nu=1, p_names=["T_c", "nu"]),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             error=false,
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.001)
@@ -68,7 +70,7 @@ close(file)
 
         sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             starting_ps=[2.27, 1.0]
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
@@ -76,7 +78,7 @@ close(file)
 
         sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             starting_ps=[2.27, 1.0],
             error=true
         )
@@ -94,7 +96,7 @@ close(file)
     @testset "Magnetization" begin
 
         sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         # the error analysis re-optimizes into a deeper minimum (nu ≈ 0.89) for these data without error bars
@@ -103,14 +105,14 @@ close(file)
 
         sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
             sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
 
         sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
             sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             starting_ps=[2.26, 1.0],
             quality=MultipleSplines()
         )
@@ -119,7 +121,7 @@ close(file)
 
         # test with SingleSpline quality function
         sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             quality=SingleSpline()
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
@@ -130,7 +132,7 @@ close(file)
 
         sp = ScalingCollapse.ScalingProblem(Ts, M_abs_mean, Ls;
             sf=ScalingCollapse.ScalingFunction(:xy, beta=0.125, p_names=["T_c", "nu", "beta"]),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             starting_ps=[2.26, 1.0],
             quality=SingleSpline()
         )
@@ -142,7 +144,7 @@ close(file)
 
         sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
             sf=ScalingCollapse.ScalingFunction(:xny),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.1)
@@ -153,7 +155,7 @@ close(file)
                 gamma=1.75,
                 p_names=["T_c", "nu", "gamma"]
             ),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.02)
@@ -163,7 +165,7 @@ close(file)
                 gamma=1.75,
                 p_names=["T_c", "nu", "gamma"]
             ),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             starting_ps=[2.27, 1.0]
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
@@ -172,7 +174,7 @@ close(file)
         # test with SingleSpline quality function
         sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
             sf=ScalingCollapse.ScalingFunction(:xny),
-            dx=[-1.0, 1.0],
+            dx=[-2.27, 2.27],
             quality=SingleSpline()
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.02)
@@ -183,7 +185,7 @@ close(file)
         sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
             sf=ScalingCollapse.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
             p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
-            dx=[-1.0, 2.2],
+            dx=[-2.27, 5.0],
         )
         p_space, residuals = ScalingCollapse.residuals(sp; dims=[1, 2, 3], N_steps=5)
         ind = argmin(residuals)
@@ -223,7 +225,7 @@ close(file)
         sp = ScalingCollapse.ScalingProblem(Ts, susceptibility, Ls;
             sf=ScalingCollapse.ScalingFunction(:xny, p_names=["T_c", "nu", "gamma"]),
             p_space=[2:0.1:2.5, 0.5:0.1:1.5, 1.5:0.1:2.5],
-            dx=[-1.0, 2.2],
+            dx=[-2.27, 5.0],
             quality=MultipleSplines()
         )
         # export scaled data

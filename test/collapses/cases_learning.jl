@@ -1,7 +1,8 @@
 # Learning transitions of classical Ising models and deformed toric codes (arXiv:2504.12385,
 # Zenodo doi:10.5281/zenodo.15227834) and of Potts models and Z_3 toric codes (arXiv:2608.20268,
 # Zenodo doi:10.5281/zenodo.21918134); data source, license and layout: ../testdata/README.md.
-# The ScalingProblem calls are those of the papers. `[published]` in references.toml holds the
+# The ScalingProblem calls are those of the papers, which used the relative form of x
+# (relative=true, the default up to version 0.2). `[published]` in references.toml holds the
 # stored fits of the deposits (full precision) and the numbers in the paper text.
 using HDF5
 
@@ -24,7 +25,7 @@ load_learning_ising_vertical(gi) =
     load_learning_curves("learning_ising/vertical.h5", "g$gi"; xof=(h, L) -> read(h, "betas/L$L") ./ LEARNING_ISING_βC)
 
 const LEARNING_ISING_VERTICAL_KWARGS = (
-    sf=ScalingFunction(:xy),
+    sf=ScalingFunction(:xy; relative=true),
     p_space=[0.6:0.01:1.3, 0.5:0.1:1.5, -0.5:0.1:0.5],
     quality=MultipleSplines(N_steps=100),
     dx=[-1.25, 1.75],
@@ -49,7 +50,7 @@ push!(CASES, CollapseCase(;
 push!(CASES, CollapseCase(;
     name="learning_ising_betac", kind=:regression,
     load=() -> load_learning_curves("learning_ising/betac.h5", ""),
-    kwargs=(sf=ScalingFunction(:xy), dx=[-2, 2],
+    kwargs=(sf=ScalingFunction(:xy; relative=true), dx=[-2, 2],
         p_space=[0.3:0.1:0.9, 1.0:0.1:5.0, 0.0:0.01:0.1], quality=MultipleSplines()),
     source="arXiv:2504.12385, Fig. 2 inset (β_c), L = 8 to 128",
 ))
@@ -67,7 +68,7 @@ for bi in 1:41
     push!(CASES, CollapseCase(;
         name="learning_ising_horizontal_b$bi", kind=:regression,
         load=() -> load_learning_curves("learning_ising/horizontal.h5", "b$bi"),
-        kwargs=(sf=ScalingFunction(:xy), dx=[-1.25, 1.25],
+        kwargs=(sf=ScalingFunction(:xy; relative=true), dx=[-1.25, 1.25],
             p_space=[0.3:0.01:1.0, 1.0:0.1:2.5, -0.4:0.1:0.4], quality=MultipleSplines(N_steps=100)),
         source="arXiv:2504.12385, horizontal cut $bi of 41, L = ds[2:end]",
     ))
@@ -78,7 +79,7 @@ for (name, bi) in (("learning_potts_inset_N1", 1), ("learning_potts_inset_N2", 2
     push!(CASES, CollapseCase(;
         name=name, kind=:regression,
         load=() -> load_learning_curves("learning_potts/insets.h5", "b$bi"),
-        kwargs=(sf=ScalingFunction(:xy), dx=bi == 2 ? [-2, 2] : [-1.5, 1.5],
+        kwargs=(sf=ScalingFunction(:xy; relative=true), dx=bi == 2 ? [-2, 2] : [-1.5, 1.5],
             p_space=[0.4:0.01:1, 0.1:0.1:3, -0.5:0.1:0.5], quality=MultipleSplines()),
         source="arXiv:2608.20268, Fig. 4 inset, N($bi)",
     ))
@@ -92,7 +93,7 @@ for bi in 1:40
     push!(CASES, CollapseCase(;
         name="learning_potts_horizontal_b$bi", kind=:regression,
         load=() -> load_learning_curves("learning_potts/horizontal.h5", "b$bi"),
-        kwargs=(sf=ScalingFunction(:xy), dx=[-1.5, 1.5],
+        kwargs=(sf=ScalingFunction(:xy; relative=true), dx=[-1.5, 1.5],
             p_space=[0.5:0.01:1, 0.1:0.1:3, -0.5:0.1:0.5], quality=MultipleSplines()),
         source="arXiv:2608.20268, horizontal cut $bi of 40 (Potts_Ic_horizontal/1)",
     ))
@@ -105,7 +106,7 @@ for gi in 1:30
     push!(CASES, CollapseCase(;
         name="learning_potts_vertical_g$gi", kind=:regression,
         load=() -> load_learning_curves("learning_potts/vertical.h5", "g$gi"),
-        kwargs=(sf=ScalingFunction(:xy), dx=[-1.5, 2.5],
+        kwargs=(sf=ScalingFunction(:xy; relative=true), dx=[-1.5, 2.5],
             p_space=[0.99:0.001:1.01, 0.6:0.1:1, -0.5:0.1:0.5], quality=MultipleSplines(),
             optimizer=ScalingCollapse.Optim.NelderMead(;
                 initial_simplex=ScalingCollapse.Optim.AffineSimplexer(; a=1e-6, b=1e-6))),

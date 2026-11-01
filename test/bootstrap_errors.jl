@@ -21,7 +21,7 @@ end
 const _BOOTSTRAP_KW = (
     sf=ScalingFunction(:x; p_names=["x_c", "nu"]),
     starting_ps=[0.5, 1.0],
-    dx=[-1.0, 1.0],
+    dx=[-0.5, 0.5],
 )
 
 @testset "bootstrap errors" begin
@@ -102,7 +102,7 @@ const _BOOTSTRAP_KW = (
             [4, 6, 8, 10, 12];
             sf=ScalingFunction(:xny, p_names=["x_c", "nu", "gamma"], nu=1),
             p_space=[5:0.1:7, 1:0.1:3],
-            dx=[-2, 2],
+            dx=[-12, 12],
             error=:bootstrap,
             n_bootstrap=30,
             rng=Xoshiro(11),

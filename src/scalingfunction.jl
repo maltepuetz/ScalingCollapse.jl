@@ -21,11 +21,15 @@ called with the data `d` and the parameters `p1`, `p2`, ... and returns a new
 The `preset` argument can be used to create a `ScalingFunction` with a preset
 function `f` and a preset set of parameter names `p_names`. The following
 presets are available:
-- `:x` rescale the x values of the data according to x -> (x - p1)/p1 * L^(1/p2)
-- `:xy` rescale the x and y values of the data according to x -> (x - p1)/p1 * L^(1/p2)
+- `:x` rescale the x values of the data according to x -> (x - p1) * L^(1/p2)
+- `:xy` rescale the x and y values of the data according to x -> (x - p1) * L^(1/p2)
     and y -> y * L^(p3/p2)
-- `:xny` rescale the x and y values of the data according to x -> (x - p1)/p1 * L^(1/p2)
+- `:xny` rescale the x and y values of the data according to x -> (x - p1) * L^(1/p2)
     and y -> y * L^(-p3/p2)
+
+With `relative=true`, all presets rescale x relative to p1 instead, i.e.
+x -> (x - p1)/p1 * L^(1/p2), the reduced form used up to version 0.2. A window `dx` of the
+relative form corresponds to `dx .* p1` in the default form.
 
 # Keyword arguments
 - `p_names::Vector{String}`: the parameter names `p_names` to be used in the
@@ -37,6 +41,9 @@ presets are available:
     the number of paramters of your function f should match the preset, i.e. if your
     function f takes 2 parameters, you should use the preset `:x` and if your function
     f takes 3 parameters, you should use the preset `:xy`.
+- `relative::Bool=false`: rescale x absolute, x -> (x - p1) * L^(1/p2) (`false`), or
+    relative to p1, x -> (x - p1)/p1 * L^(1/p2) (`true`). Only for the presets `:x`, `:xy`
+    and `:xny`, and not together with a custom `f`.
 - `x_scale::String`: the scaling function for the x values. This is just used to
     display the scaling function in plots and julias show function.
 - `y_scale::String`: the scaling function for the y values. This is just used to
@@ -57,6 +64,9 @@ ScalingFunction(:x; p_names=["T_c", "nu"])
 
 # lets fix nu to 1.0
 ScalingFunction(:x; p_names=["T_c", "nu"], nu=1.0)
+
+# rescale x relative to T_c, as (T - T_c)/T_c * L^(1/nu)
+ScalingFunction(:x; p_names=["T_c", "nu"], relative=true)
 
 # rescale the x and y axis
 ScalingFunction(:xy; p_names=["T_c", "nu", "beta"])
@@ -125,7 +135,7 @@ struct ScalingFunction
     end
 end
 
-const SCALINGFUNCTION_KWARGS = (:f, :p_names, :x_scale, :y_scale, :N_parameters)
+const SCALINGFUNCTION_KWARGS = (:f, :p_names, :x_scale, :y_scale, :N_parameters, :relative)
 
 # throw an ArgumentError listing the valid keywords if any keyword is unknown
 function _check_kwargs(caller, given, valid; hint="")
@@ -170,7 +180,7 @@ function _my_custom_scaling(d::ScalingCollapse.Data, p1, p2)
     es = zeros(length(d.es))
 
     for (i, x) in enumerate(d.xs)
-        xs[i] = (x - p1) / p1 * d.L^(1 / p2)
+        xs[i] = (x - p1) * d.L^(1 / p2)
     end
     for (i, y) in enumerate(d.ys)
         ys[i] = y
@@ -192,7 +202,7 @@ import ScalingCollapse: handle_preset
 function handle_preset(::Val{:my_custom_preset}; kwargs...)
     f = _my_custom_scaling
     p_names = ["p1", "p2"]
-    x_scale = "(x - p1)/p1 * L^(1/p2)"
+    x_scale = "(x - p1) * L^(1/p2)"
     y_scale = "y"
     return f, p_names, x_scale, y_scale
 end
@@ -206,10 +216,11 @@ sf = ScalingFunction(:my_custom_preset)
 function handle_preset end
 
 function handle_preset(::Val{:x}; kwargs...)
-    f = get(kwargs, :f, _power_scaling)
+    relative = _relative(kwargs)
+    f = get(kwargs, :f, relative ? _power_scaling : _absolute_power_scaling)
     p_names = get(kwargs, :p_names, ["p1", "p2"])
     x_scale = get(kwargs, :x_scale) do
-        "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+        _x_scale(p_names, relative)
     end
     y_scale = get(kwargs, :y_scale, "y")
     return f, p_names, x_scale, y_scale
@@ -217,10 +228,11 @@ end
 
 # x and y scaling with (pos x), (pos y) exponent
 function handle_preset(::Val{:xy}; kwargs...)
-    f = get(kwargs, :f, _power_scaling)
+    relative = _relative(kwargs)
+    f = get(kwargs, :f, relative ? _power_scaling : _absolute_power_scaling)
     p_names = get(kwargs, :p_names, ["p1", "p2", "p3"])
     x_scale = get(kwargs, :x_scale) do
-        "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+        _x_scale(p_names, relative)
     end
     y_scale = get(kwargs, :y_scale) do
         "y * L^($(p_names[3])/$(p_names[2]))"
@@ -230,17 +242,41 @@ end
 
 # x and y scaling with (pos x), (neg y) exponent
 function handle_preset(::Val{:xny}; kwargs...)
+    relative = _relative(kwargs)
     f = get(kwargs, :f) do
-        (d, p1, p2, p3) -> _power_scaling(d, p1, p2, -p3)
+        if relative
+            (d, p1, p2, p3) -> _power_scaling(d, p1, p2, -p3)
+        else
+            (d, p1, p2, p3) -> _absolute_power_scaling(d, p1, p2, -p3)
+        end
     end
     p_names = get(kwargs, :p_names, ["p1", "p2", "p3"])
     x_scale = get(kwargs, :x_scale) do
-        "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+        _x_scale(p_names, relative)
     end
     y_scale = get(kwargs, :y_scale) do
         "y * L^(-$(p_names[3])/$(p_names[2]))"
     end
     return f, p_names, x_scale, y_scale
+end
+
+# the `relative` kwarg of the presets: x absolute (default) or relative to p1
+function _relative(kwargs)
+    haskey(kwargs, :relative) || return false
+    relative = kwargs[:relative]
+    relative isa Bool || throw(ArgumentError(
+        "relative must be true or false, got $(repr(relative))."
+    ))
+    haskey(kwargs, :f) && throw(ArgumentError(
+        "relative only selects the preset scaling function and cannot be combined with " *
+        "a custom f."
+    ))
+    return relative
+end
+
+function _x_scale(p_names, relative)
+    relative && return "(x - $(p_names[1]))/$(p_names[1]) * L^(1/$(p_names[2]))"
+    return "(x - $(p_names[1])) * L^(1/$(p_names[2]))"
 end
 
 function handle_preset(::Val{T}; kwargs...) where {T}
@@ -272,6 +308,10 @@ function ScalingFunction(; kwargs...)
 end
 
 function ScalingFunction(f::Function; kwargs...)
+    haskey(kwargs, :relative) && throw(ArgumentError(
+        "relative only selects the preset scaling function and cannot be combined with " *
+        "a custom f."
+    ))
     p_names = if haskey(kwargs, :p_names)
         kwargs[:p_names]
     else
@@ -298,30 +338,48 @@ function fixed_p_names(sf::ScalingFunction)
     return sf.p_names[sf.fixed_idxs]
 end
 
-# standard scaling function for 2 parameters
-function _power_scaling(d::Data, p1, p2)
+# coefficients (a, b) of x -> fma(x, a, b) = (x - p1)/p1 * L^(1/p2)
+_relative_x_coefficients(L, p1, p2) = (L^(1 / p2) / p1, -L^(1 / p2))
+
+# coefficients (a, b) of x -> fma(x, a, b) = (x - p1) * L^(1/p2)
+function _absolute_x_coefficients(L, p1, p2)
+    s = L^(1 / p2)
+    return s, -p1 * s
+end
+
+# scaling functions for 2 and 3 parameters, x relative to p1 (relative=true)
+_power_scaling(d::Data, p1, p2) = _linear_scaling(d, _relative_x_coefficients(d.L, p1, p2)...)
+function _power_scaling(d::Data, p1, p2, p3)
+    return _linear_scaling(d, _relative_x_coefficients(d.L, p1, p2)..., d.L^(p3 / p2))
+end
+
+# standard scaling functions for 2 and 3 parameters, x absolute
+function _absolute_power_scaling(d::Data, p1, p2)
+    return _linear_scaling(d, _absolute_x_coefficients(d.L, p1, p2)...)
+end
+function _absolute_power_scaling(d::Data, p1, p2, p3)
+    return _linear_scaling(d, _absolute_x_coefficients(d.L, p1, p2)..., d.L^(p3 / p2))
+end
+
+# x -> fma(x, a, b), y and e unchanged
+function _linear_scaling(d::Data, a, b)
     xs = similar(d.xs)
-    prefactor = d.L^(1 / p2) / p1
-    shift = -d.L^(1 / p2)
-    map!(x -> fma(x, prefactor, shift), xs, d.xs)
+    map!(x -> fma(x, a, b), xs, d.xs)
     return Data(d.L, xs, copy(d.ys), copy(d.es))
 end
 
-# standard scaling function for 3 parameters
-function _power_scaling(d::Data, p1, p2, p3)
+# x -> fma(x, a, b), y -> y * c, e -> e * c
+function _linear_scaling(d::Data, a, b, c)
     xs = similar(d.xs)
     ys = similar(d.ys)
     es = similar(d.es)
 
-    prefactor_x = d.L^(1 / p2) / p1
-    prefactor_y = d.L^(p3 / p2)
-    shift_x = -d.L^(1 / p2)
-    map!(x -> fma(x, prefactor_x, shift_x), xs, d.xs)
+    map!(x -> fma(x, a, b), xs, d.xs)
 
     @assert length(ys) == length(es)
     for i in eachindex(ys)
-        ys[i] = d.ys[i] * prefactor_y
-        es[i] = d.es[i] * prefactor_y
+        ys[i] = d.ys[i] * c
+        es[i] = d.es[i] * c
     end
 
     return Data(d.L, xs, ys, es)

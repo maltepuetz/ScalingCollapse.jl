@@ -108,14 +108,14 @@ using ScalingCollapse
 ScalingProblem(xs, ys, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 
 # or the same but with errors
 ScalingProblem(xs, ys, es, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 ```
 
@@ -124,7 +124,7 @@ ScalingProblem(xs, ys, es, Ls;
 # (e.g. for ys == magnetization of Ising model)
 ScalingProblem(xs, ys, Ls;
     sf=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]),
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 ```
 
@@ -133,7 +133,7 @@ ScalingProblem(xs, ys, Ls;
 # (e.g. for ys == susceptibility of Ising model)
 ScalingProblem(xs, ys, Ls;
     sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 ```
 
