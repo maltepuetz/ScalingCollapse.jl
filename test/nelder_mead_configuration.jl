@@ -142,6 +142,44 @@ end
         @test length(unique(simplex)) == 3
     end
 
+    @testset "StepSimplexer" begin
+        S = StepSimplexer([0.1, 0.01])
+        @test ScalingCollapse.Optim.simplexer(S, [1.0, 2.0]) ≈
+              [[1.0, 2.0], [1.1, 2.0], [1.0, 2.01]]
+        @test_throws DimensionMismatch ScalingCollapse.Optim.simplexer(S, [1.0, 2.0, 3.0])
+        @test_throws ArgumentError StepSimplexer([0.1, 0.0])
+        @test_throws ArgumentError StepSimplexer([0.1, Inf])
+        @test StepSimplexer([1, -2]).steps == [1.0, -2.0]
+
+        # fits of a subset of the free parameters (profile errors) use their steps only
+        @test ScalingCollapse._restrict_simplexer(StepSimplexer([0.1, 0.2, 0.3]), [1, 3]).steps ==
+              [0.1, 0.3]
+        affine = ScalingCollapse.Optim.AffineSimplexer()
+        @test ScalingCollapse._restrict_simplexer(affine, [1]) === affine
+
+        # one step per free parameter (fixed parameters have none)
+        step_optimizer(steps) =
+            ScalingCollapse.Optim.NelderMead(initial_simplex=StepSimplexer(steps))
+        @test_throws ArgumentError ScalingProblem(Ts, binder, Ls; sf=ScalingFunction(:x),
+            starting_ps=[2.27, 1.0], optimizer=step_optimizer([0.01, 0.05, 0.1]))
+        @test_throws ArgumentError ScalingProblem(Ts, binder, Ls;
+            sf=ScalingFunction(:x; nu=1.0), starting_ps=[2.27],
+            optimizer=step_optimizer([0.01, 0.05]))
+
+        # the profile fits of T_c (a valley of width ~0.002) use its small step: a brute-force
+        # profile over a fine T_c grid reaches 1.3 times the minimum at Δnu ≈ -0.033 and
+        # +0.027. The default simplex (step 0.25 in T_c) misses this valley and returns the
+        # conditional width 0.019 for nu.
+        kwargs = (sf=ScalingFunction(:x), starting_ps=[2.27, 1.0], dx=[-1.0, 1.0])
+        sp_conditional = ScalingProblem(Ts, binder, Ls; kwargs..., error=:conditional)
+        sp = ScalingProblem(Ts, binder, Ls; kwargs..., optimizer=step_optimizer([0.01, 0.05]))
+        @test sp.error === :profile
+        @test all(abs.(sp.optimal_ps .- sp_conditional.optimal_ps) .<
+                  0.25 .* sp.optimal_ps_error)
+        @test all(sp.optimal_ps_error .>= sp_conditional.optimal_ps_error)
+        @test sp.optimal_ps_error[2] ≈ 0.033 rtol = 0.1
+    end
+
     @testset "parameter scan builds its simplex with quality_scan" begin
         # the scan must shrink simplex vertices against quality_scan, never quality
         sp = OptimizationConfigurationHarness(
