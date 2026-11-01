@@ -24,6 +24,11 @@ large. For example, on noise-free synthetic data with 4 sizes and 41 points each
 about 5 of the largest size lie in the interval), `ν` came out 2-3% too large; with 161
 points per size, 0.1%.
 The bias vanishes as the grid is refined. `Linear` and `MultipleSplines` do not show it.
+
+# Ruggedness
+The bracketing data points change discontinuously as scaled points of different sizes pass
+each other, so the quality jumps and has many shallow local minima on uniformly gridded data,
+like `Linear` (see its docstring). `MultipleSplines` gives a smooth quality.
 """
 struct Houdayer <: QualityFunction end
 
