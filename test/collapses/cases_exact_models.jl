@@ -11,11 +11,13 @@ function load_exact(file, prefix="")
 end
 
 # E5: ξ_L/L of the periodic Ising strip (Kaufman), T_c = 2/log(1+√2) and ν = 1. dx covers the
-# whole overlap of the L = 8 and L = 64 curves.
+# whole overlap of the L = 8 and L = 64 curves; it is the window [-1, 1] of the relative form
+# (T − T_c)/T_c·L^{1/ν}, times T_c.
 push!(CASES, CollapseCase(;
     name="ising_strip_xi_exact", kind=:exact,
     load=() -> load_exact("ising_strip.h5"),
-    kwargs=(sf=ScalingFunction(:x), p_space=[2.0:0.02:2.5, 0.5:0.1:1.6], dx=[-1.0, 1.0]),
+    kwargs=(sf=ScalingFunction(:x), p_space=[2.0:0.02:2.5, 0.5:0.1:1.6],
+        dx=[-1.0, 1.0] .* (2 / log(1 + √2))),
     exact=Dict(1 => 2 / log(1 + √2), 2 => 1.0),
     # measured: T_c = 2.269210 ± 2.34e-4 (0.11σ), ν = 1.00764 ± 6.56e-3 (1.2σ)
     σmax=Dict(1 => 7.0e-4, 2 => 2.0e-2),

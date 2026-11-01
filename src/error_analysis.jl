@@ -265,7 +265,8 @@ function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64})
     isfinite(q) || return Inf, nu, true
 
     optimizer = Optim.NelderMead(
-        BoundedSimplexer(sp.optimizer.initial_simplex, lower, upper, f),
+        BoundedSimplexer(_restrict_simplexer(sp.optimizer.initial_simplex, nuisance),
+            lower, upper, f),
         sp.optimizer.parameters,
     )
     result = optimize(f, copy(nu), optimizer, sp.optimizer_options)

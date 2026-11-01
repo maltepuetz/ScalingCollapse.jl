@@ -1,12 +1,13 @@
-function optimize_parameters!(sp)
+function optimize_parameters!(sp, starts=[sp.starting_ps])
 
     # scan parameter space
     if !sp.skip_scan
         parameter_scan!(sp)
+        starts = [sp.starting_ps]
     end
 
     # optimize parameters
-    optimize_starting_ps!(sp)
+    optimize_starting_ps!(sp, starts)
 
     return nothing
 end
@@ -66,20 +67,31 @@ function parameter_scan!(sp)
     return nothing
 end
 
-function optimize_starting_ps!(sp)
+# fit from each of the starting points and keep the fit with the lowest finite quality;
+# sp.starting_ps is set to the start of that fit
+function optimize_starting_ps!(sp, starts=[sp.starting_ps])
 
     sp.verbose && @info "Starting optimization of provided starting parameters..."
 
     # optimize starting parameters
     f = ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true))
-    result = optimize(f, sp.starting_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
+    result = nothing
+    for start in starts
+        r = optimize(f, start, _bounded_optimizer(sp, f), sp.optimizer_options)
+        if isfinite(r.minimum) && (isnothing(result) || r.minimum < result.minimum)
+            sp.starting_ps, result = start, r
+        end
+    end
 
-    isfinite(result.minimum) || error(
+    isnothing(result) && error(
         "The optimization did not find any parameters with a finite quality. Starting " *
-        "from $(sp.starting_ps), the rescaled data of the different system sizes do not " *
-        "overlap within the optimization interval dx (or contain too few points there). " *
-        "Check starting_ps, p_space and dx."
+        (length(starts) == 1 ? "from $(only(starts))" : "from any of $(starts)") *
+        ", the rescaled data of the different system sizes do not overlap within the " *
+        "optimization interval dx (or contain too few points there). Check starting_ps, " *
+        "p_space and dx."
     )
+    sp.verbose && length(starts) > 1 && @info "Best of $(length(starts)) starting " *
+                                              "points: $(sp.starting_ps)."
     if !Optim.converged(result) && sp.optimizer_options.show_warnings
         hint = if Optim.iteration_limit_reached(result)
             "Consider increasing the iteration limit via " *
@@ -89,7 +101,8 @@ function optimize_starting_ps!(sp)
             "$(sp.starting_ps) has vertices where the quality function is not finite (e.g. " *
             "no overlap of the rescaled data within dx). Consider widening p_space or " *
             "using a smaller initial simplex, e.g. " *
-            "optimizer=Optim.NelderMead(initial_simplex=Optim.AffineSimplexer(b=0.01))."
+            "optimizer=Optim.NelderMead(initial_simplex=Optim.AffineSimplexer(b=0.01)) " *
+            "or one step per parameter with StepSimplexer(steps)."
         end
         @warn "The Nelder-Mead optimization stopped after " *
               "$(Optim.iterations(result)) iterations without converging. The optimal " *
@@ -102,6 +115,60 @@ function optimize_starting_ps!(sp)
     sp.verbose && @info "Found optimal parameters."
     return nothing
 end
+
+
+
+"""
+    StepSimplexer(steps)
+
+Initial Nelder-Mead simplex with one step per free parameter: vertex `i + 1` is the
+starting point with `steps[i]` added to parameter `i`. Use it as
+`optimizer=Optim.NelderMead(initial_simplex=StepSimplexer(steps))` when the free parameters
+live on very different scales. `Optim.AffineSimplexer(a, b)` moves every parameter by
+`b * p + a`, which follows the value of the parameter rather than its scale in the problem;
+e.g. the default (`a = 0.025`, `b = 0.1`) moves a critical point `p_c ≈ 0.5` by 0.075, even
+if the data only span a window of width 1e-3 around it.
+
+`steps` must have one finite, nonzero entry per free parameter (in the order of
+`scaled_p_names(sf)`; fixed parameters have no entry). A step of the order of the expected
+error of the parameter is a good choice. Steps for which the quality is not finite are
+halved, as for any initial simplex. In the profile error analysis (`error=:profile`), the
+inner fits use the steps of the parameters they re-fit. This matters for narrow quality
+valleys: if the default steps are much larger than the valley of a re-fitted parameter,
+the inner fits can miss it, and the profile error comes out close to the conditional one.
+
+# Examples
+```julia
+optimizer = ScalingCollapse.Optim.NelderMead(initial_simplex=StepSimplexer([1e-3, 0.05]))
+ScalingProblem(xs, ys, Ls; sf=ScalingFunction(:x), p_space=[0.48:0.002:0.52, 0.8:0.1:2.0],
+    optimizer=optimizer)
+```
+"""
+struct StepSimplexer <: Optim.Simplexer
+    steps::Vector{Float64}
+    function StepSimplexer(steps::AbstractVector{<:Real})
+        all(s -> isfinite(s) && !iszero(s), steps) || throw(ArgumentError(
+            "The steps of a StepSimplexer must be finite and nonzero, got $(steps)."
+        ))
+        return new(Float64.(steps))
+    end
+end
+
+function Optim.simplexer(S::StepSimplexer, initial_x::Tx) where {Tx}
+    length(S.steps) == length(initial_x) || throw(DimensionMismatch(
+        "The StepSimplexer has $(length(S.steps)) steps, but the starting point has " *
+        "$(length(initial_x)) parameters."
+    ))
+    simplex = Tx[copy(initial_x) for _ in 1:length(initial_x)+1]
+    for (k, j) in enumerate(eachindex(initial_x))
+        simplex[k+1][j] += S.steps[k]
+    end
+    return simplex
+end
+
+# the initial simplex for a fit of the free parameters `indices` only
+_restrict_simplexer(S::Optim.Simplexer, indices) = S
+_restrict_simplexer(S::StepSimplexer, indices) = StepSimplexer(S.steps[indices])
 
 
 

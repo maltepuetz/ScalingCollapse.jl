@@ -18,9 +18,13 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `quality_scan::QualityFunction=MultipleSplines(scan_mode=true)`: quality function for the
     parameter space scan (it is highly recommended to use the default function here)
 - `verbose::Bool=false`: print information during optimization
-- `starting_ps::Vector{Float64}`: If `starting_ps` are given, there will be no initial
-    parameter space scan. Instead, the optimization will start at the given points. This is
-    much faster, but might not find the global minimum.
+- `starting_ps::Union{Vector{<:Real},Vector{<:Vector{<:Real}}}`: If `starting_ps` are
+    given, there will be no initial parameter space scan. Instead, the optimization will
+    start at the given point. This is much faster, but might not find the global minimum.
+    To try several starting points, pass a vector of them (e.g.
+    `starting_ps=[[0.49, 1.2], [0.50, 1.35]]`): the optimization runs from each of them,
+    the fit with the lowest finite quality is kept (starts without a finite quality are
+    skipped), and the error analysis runs once on that fit.
 - `error::Union{Bool,Symbol}=true`: error analysis method. `true`/`:profile` (default),
     `:conditional`, `:bootstrap`, or `false` (no error analysis); anything else throws an
     `ArgumentError`.
@@ -63,7 +67,10 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `rng::AbstractRNG=Random.default_rng()`: random number generator for `error=:bootstrap`;
     pass a seeded one (e.g. `Random.Xoshiro(42)`) for reproducible errors.
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
-    initial simplex and adaptive or fixed algorithm parameters.
+    initial simplex and adaptive or fixed algorithm parameters. The default initial simplex
+    `Optim.AffineSimplexer(a=0.025, b=0.1)` moves every parameter by `0.1 * p + 0.025`; for
+    parameters on very different scales, use `StepSimplexer` with one step per free
+    parameter.
 - `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
     including tolerances, iteration and function-call limits, callbacks, tracing, and
     warnings.
@@ -82,7 +89,8 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `quality_scan::QualityFunction`: quality function for the parameter space scan
 - `quality::QualityFunction`: quality function
 - `skip_scan::Bool`: `true` if `starting_ps` are given by the user
-- `starting_ps::Vector{Float64}`: starting points for the optimization
+- `starting_ps::Vector{Float64}`: starting point of the final optimization (with several
+    `starting_ps`, the one that gave the best fit)
 - `errors_defined::Bool`: `true` if errors are given by the user
 - `optimizer::Optim.NelderMead`: Nelder-Mead method configuration
 - `optimizer_options::Optim.Options`: optimization runtime and stopping configuration
@@ -100,14 +108,14 @@ using ScalingCollapse
 ScalingProblem(xs, ys, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 
 # or the same but with errors
 ScalingProblem(xs, ys, es, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 ```
 
@@ -116,7 +124,7 @@ ScalingProblem(xs, ys, es, Ls;
 # (e.g. for ys == magnetization of Ising model)
 ScalingProblem(xs, ys, Ls;
     sf=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]),
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 ```
 
@@ -125,7 +133,7 @@ ScalingProblem(xs, ys, Ls;
 # (e.g. for ys == susceptibility of Ising model)
 ScalingProblem(xs, ys, Ls;
     sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
-    dx=[-1.0, 1.0],
+    dx=[-2.0, 2.0],
 )
 ```
 
@@ -146,6 +154,14 @@ ScalingProblem(xs, ys, Ls;
     starting_ps=[2.27, 1.0],
     optimizer=optimizer,
     optimizer_options=optimizer_options,
+)
+
+# one initial step per free parameter (here T_c and nu), e.g. of the order of their errors
+optimizer = ScalingCollapse.Optim.NelderMead(initial_simplex=StepSimplexer([0.002, 0.05]))
+ScalingProblem(xs, ys, Ls;
+    sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
+    p_space=[2.2:0.01:2.35, 0.5:0.1:1.5],
+    optimizer=optimizer,
 )
 ```
 
@@ -265,16 +281,14 @@ mutable struct ScalingProblem
         verbose = get(kwargs, :verbose, false)
         error = _error_method(get(kwargs, :error, true))
         skip_scan = false
-        starting_ps = get(kwargs, :starting_ps, zeros(n_ps))
+        starts = [zeros(n_ps)]
         if haskey(kwargs, :starting_ps)
-            length(starting_ps) == n_ps || throw(ArgumentError(
-                "starting_ps has $(length(starting_ps)) entries, but the scaling function " *
-                "has $(n_ps) free parameters $(scaled_p_names(sf))."
-            ))
+            starts = _starting_points(kwargs[:starting_ps], sf)
             # if starting_ps are given, there will be no initial parameter space scan
             p_space = [-1_000_000:1_000_000 for _ in 1:n_ps]
             skip_scan = true
         end
+        starting_ps = first(starts)
         quality_scan = get(kwargs, :quality_scan, MultipleSplines(scan_mode=true))
         quality = get(kwargs, :quality, Linear())
         error_threshold = _check_error_threshold(get(kwargs, :error_threshold, 1.3), sf)
@@ -288,6 +302,13 @@ mutable struct ScalingProblem
         )
         optimizer isa Optim.NelderMead || throw(
             ArgumentError("optimizer must be an Optim.NelderMead instance"),
+        )
+        simplex = optimizer.initial_simplex
+        (!(simplex isa StepSimplexer) || length(simplex.steps) == n_ps) || throw(
+            ArgumentError(
+                "The StepSimplexer of the optimizer has $(length(simplex.steps)) steps, " *
+                "but the scaling function has $(n_ps) free parameters $(scaled_p_names(sf))."
+            ),
         )
         optimizer_options = get(kwargs, :optimizer_options, Optim.Options())
         optimizer_options isa Optim.Options || throw(
@@ -312,7 +333,7 @@ mutable struct ScalingProblem
         # unzip args...
         data = unzip_data(args...)
         _check_data(data, quality, quality_scan, skip_scan)
-        _check_scaling_function(sf, first(data), skip_scan ? starting_ps : first.(p_space))
+        _check_scaling_function(sf, first(data), skip_scan ? first(starts) : first.(p_space))
 
         # check if errors are defined
         errors_defined = false
@@ -353,10 +374,36 @@ mutable struct ScalingProblem
         )
 
         # solve ScalingProblem
-        solve!(sp)
+        solve!(sp, starts)
         return sp
     end
 
+end
+
+
+# normalize `starting_ps` (one vector or a vector of vectors) to a list of starting points
+function _starting_points(starting_ps, sf)
+    is_point(s) = s isa AbstractVector && all(v -> v isa Real, s)
+    starts = if is_point(starting_ps) && !isempty(starting_ps)
+        [starting_ps]
+    elseif starting_ps isa AbstractVector && !isempty(starting_ps) &&
+           all(is_point, starting_ps)
+        starting_ps
+    else
+        throw(ArgumentError(
+            "starting_ps must be a vector of parameter values or a non-empty vector of " *
+            "such vectors (several starting points), got $(repr(starting_ps))."
+        ))
+    end
+    n_ps = n_parameters(sf)
+    for (i, s) in enumerate(starts)
+        name = length(starts) == 1 ? "starting_ps" : "starting_ps[$i]"
+        length(s) == n_ps || throw(ArgumentError(
+            "$name has $(length(s)) entries, but the scaling function has $(n_ps) free " *
+            "parameters $(scaled_p_names(sf))."
+        ))
+    end
+    return [Vector{Float64}(s) for s in starts]
 end
 
 
@@ -429,10 +476,10 @@ function _check_scaling_function(sf, d, ps)
 end
 
 
-function solve!(sp::ScalingProblem)
+function solve!(sp::ScalingProblem, starts=[sp.starting_ps])
 
     # find global minimum
-    optimize_parameters!(sp)
+    optimize_parameters!(sp, starts)
 
     # perform error analysis
     if sp.error !== :none
