@@ -16,6 +16,7 @@ using HDF5
     include("error_handling.jl")
     include("error_methods.jl")
     include("bootstrap_errors.jl")
+    include("parameter_errors.jl")
     include("utilityfunctions.jl")
     include("collapses/framework_tests.jl")
     include("collapses/runcollapses.jl")
