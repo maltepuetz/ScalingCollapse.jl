@@ -10,6 +10,10 @@ these points, so the spline keeps its flexibility when the scaling stretches or 
 the x axis. The number of knots can be specified using the `N_knots` keyword argument. If
 `N_knots` is not specified, the number of knots is set to
 `number_of_data_points_in_interval / 5`.
+
+Points entering or leaving the interval change the fitted spline abruptly, so on uniformly
+gridded data the quality is rugged like that of `Linear` (see its docstring).
+`MultipleSplines` gives a smooth quality.
 """
 struct SingleSpline <: QualityFunction
     N_knots::Int

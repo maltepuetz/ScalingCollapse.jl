@@ -133,9 +133,10 @@ if the data only span a window of width 1e-3 around it.
 `scaled_p_names(sf)`; fixed parameters have no entry). A step of the order of the expected
 error of the parameter is a good choice. Steps for which the quality is not finite are
 halved, as for any initial simplex. In the profile error analysis (`error=:profile`), the
-inner fits use the steps of the parameters they re-fit. This matters for narrow quality
-valleys: if the default steps are much larger than the valley of a re-fitted parameter,
-the inner fits can miss it, and the profile error comes out close to the conditional one.
+inner fits use only the steps of the parameters they re-fit. With an affine simplex (such
+as the default), the inner fits are instead followed by a refit with one step per re-fitted
+parameter equal to its conditional error, so they also resolve quality valleys much
+narrower than the affine steps.
 
 # Examples
 ```julia

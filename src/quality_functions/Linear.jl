@@ -6,6 +6,22 @@ Quality function that interpolates all scaled data points to a single master cur
 every data point, we take the closest data points, to the left and to the right to
 interpolate a linear function. The quality is then calculated as the sum of the squared
 differences between the data points and the interpolated values.
+
+# Limitations
+The quality is piecewise: it jumps whenever scaled points of different sizes swap order in x
+(the neighbour of a third point changes from one size to the other) and whenever a point
+enters or leaves the interval. It also dips where the scaled x grids of the sizes line up:
+near-coincident points of different sizes are compared with each other without interpolation
+error. On uniformly gridded data this gives false minima. For example:
+- percolation data on a grid uniform in `(p - 1/2) L^{0.7}`: the quality changes abruptly at
+  exactly `p_c = 1/2`, where every size has a point at `x = 0`, and has its lowest profile
+  minimum near the commensurate `ν = 1/0.7` instead of near the true `ν = 4/3`;
+- 2D Ising Binder cumulant on a uniform temperature grid (`L = 8` to `64`): minimized over
+  `T_c`, the quality oscillates by about ±50% every 0.02 in `ν`, with 19 local minima for
+  `ν` in `[0.8, 1.1]`.
+`Houdayer` and `SingleSpline` show the same kind of ruggedness. For uniformly gridded data,
+prefer `MultipleSplines`, which compares smooth interpolations of every size and gives a
+smooth quality, and check a fit by scanning the quality around it with [`residuals`](@ref).
 """
 struct Linear <: QualityFunction end
 

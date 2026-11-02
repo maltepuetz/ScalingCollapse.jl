@@ -43,7 +43,10 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
     are `NaN`. A lower quality outside `p_space` gives `NaN` for that parameter and a
     warning that `p_space` may need widening. With `error=:profile`, `optimizer` and
     `optimizer_options` (including `time_limit`, `show_trace` and `callback`) also apply to
-    every inner fit of the error analysis. The errors are widths defined by a quality
+    every inner fit of the error analysis. With an `Optim.AffineSimplexer` (the default),
+    every inner fit is followed by a refit with one initial step per re-fitted parameter
+    equal to its conditional error, so that quality valleys much narrower than the affine
+    steps are resolved; any other initial simplex is used alone. The errors are widths defined by a quality
     threshold, not standard deviations with a known coverage. Profiling accounts for
     correlations between parameters, but the threshold is not calibrated and correlated
     data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.

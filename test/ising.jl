@@ -37,11 +37,14 @@ close(file)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.07)
 
         # README example: the scan only finds minima at the nu = 1.5 edge of p_space, so
-        # the initial Nelder-Mead simplex must stay inside p_space to leave that edge
+        # the initial Nelder-Mead simplex must stay inside p_space to leave that edge.
+        # MultipleSplines, since on this uniformly gridded data the Linear quality is rugged
+        # and its minimum depends on grid alignment (see the Linear docstring).
         sp = ScalingCollapse.ScalingProblem(Ts, binder, Ls;
             sf=ScalingCollapse.ScalingFunction(:x; p_names=["T_c", "nu"]),
             p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
             dx=[-2.0, 2.0],
+            quality=MultipleSplines(),
         )
         @test isapprox(sp.optimal_ps[1], 2.269; atol=0.01)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=0.05)
