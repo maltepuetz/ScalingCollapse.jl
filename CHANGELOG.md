@@ -9,6 +9,12 @@ instead.
 
 ## Unreleased
 
+### Documentation
+
+- The glow behind the logo on the documentation's home page is three soft blobs in the
+  colors of the logo's dots, in both themes, and looks the same on first load as after
+  toggling the theme (#66).
+
 ## 0.3.0 - 2026-11-02
 
 ### Breaking changes
