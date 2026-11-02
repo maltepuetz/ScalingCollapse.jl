@@ -78,6 +78,8 @@ instead.
   scaling functions, fitting, error analysis, quality functions), worked examples with
   plots, and a grouped API reference (#56, #62, #64).
 - Rewritten README and docstrings (#64).
+- The error analysis page quantifies what the default `error_threshold = 1.3` means,
+  from a benchmark on synthetic data and the cases with exactly known parameters (#65).
 
 ## 0.2.6 - 2026-10-29
 
