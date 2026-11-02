@@ -92,6 +92,12 @@ const _BOOTSTRAP_KW = (
             error=:bootstrap, n_bootstrap=20, rng=Xoshiro(1))
         @test all(isnan, sp.optimal_ps_error)
         @test isfinite(sp.minimum)
+
+        # refits stopped by the iteration limit: kept, warning
+        sp = @test_logs (:warn, r"refits stopped without converging") match_mode=:any ScalingProblem(
+            xs, ys, es, Ls_b; _BOOTSTRAP_KW..., error=:bootstrap, n_bootstrap=20, rng=Xoshiro(1),
+            optimizer_options=ScalingCollapse.Optim.Options(iterations=3))
+        @test all(isfinite, sp.optimal_ps_error)
     end
 
     @testset "CDW data with error bars" begin
