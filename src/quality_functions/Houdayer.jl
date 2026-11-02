@@ -57,8 +57,8 @@ function (::Houdayer)(sp, parameters; check_bounds=false)
         sp.dx[2]
     )
 
-    # check whether the constructed optimization interval is valid
-    interval[1] > interval[2] && return Inf
+    # check whether the constructed optimization interval is valid (also rejects NaN)
+    interval[1] <= interval[2] || return Inf
 
     N = 0  # counts number of terms in the sum
     S = 0.0  # quality of the scaling

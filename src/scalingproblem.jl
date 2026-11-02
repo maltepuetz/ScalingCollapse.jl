@@ -14,7 +14,7 @@ For more information on the arguments, see methods(ScalingCollapse.unzip_data).
 - `sf::ScalingFunction=ScalingFunction(preset; kwargs...)`: scaling function
 - `p_space::Vector{StepRangeLen}=[0.1:0.1:3.0 for _ in sf.p_names]`: parameter search space
 - `dx::Vector{Float64}=[-Inf, Inf]`: optimization interval
-- `quality::QualityFunction=Linear()`: quality function
+- `quality::QualityFunction=MultipleSplines()`: quality function
 - `quality_scan::QualityFunction=MultipleSplines(scan_mode=true)`: quality function for the
     parameter space scan (it is highly recommended to use the default function here)
 - `verbose::Bool=false`: print information during optimization
@@ -293,7 +293,7 @@ mutable struct ScalingProblem
         end
         starting_ps = first(starts)
         quality_scan = get(kwargs, :quality_scan, MultipleSplines(scan_mode=true))
-        quality = get(kwargs, :quality, Linear())
+        quality = get(kwargs, :quality, MultipleSplines())
         error_threshold = _check_error_threshold(get(kwargs, :error_threshold, 1.3), sf)
         (length(dx) == 2 && dx[1] < dx[2]) || throw(ArgumentError(
             "dx must be an interval [x_min, x_max] with x_min < x_max, got $(dx)."
@@ -444,13 +444,15 @@ function _check_data(data, quality, quality_scan, skip_scan)
         ))
     end
 
-    # splines of degree 3 need at least 4 data points per system size
-    uses_splines = quality isa MultipleSplines || (!skip_scan && quality_scan isa MultipleSplines)
-    if uses_splines
+    # the interpolations need a minimum number of data points per system size (cubic
+    # splines: 4)
+    used = [q for q in (quality, skip_scan ? nothing : quality_scan) if q isa MultipleSplines]
+    if !isempty(used)
+        n_min = maximum(min_points, used)
         for d in data
-            length(d.xs) >= 4 || throw(ArgumentError(
-                "The MultipleSplines quality function needs at least 4 data points per " *
-                "system size, but L = $(d.L) has $(length(d.xs)). Use a different " *
+            length(d.xs) >= n_min || throw(ArgumentError(
+                "The MultipleSplines quality function needs at least $(n_min) data points " *
+                "per system size, but L = $(d.L) has $(length(d.xs)). Use a different " *
                 "quality / quality_scan function or provide starting_ps to skip the scan."
             ))
         end
@@ -702,9 +704,6 @@ function scaled_data(sp::ScalingProblem, ps; kwargs...)
             throw(ArgumentError("Splines are available only for the MultipleSplines quality function."))
         end
 
-        y_splines = [
-            Spline1D(xs[i], ys[i], k=3) for i in eachindex(scaled_data)
-        ]
         e_splines = [
             Spline1D(xs[i], es[i], k=1) for i in eachindex(scaled_data)
         ]
@@ -725,12 +724,15 @@ function scaled_data(sp::ScalingProblem, ps; kwargs...)
             range(interval[1], interval[2], length=sp.quality.N_steps)
             for _ in eachindex(scaled_data)
         ]
-        yvals = [zeros(sp.quality.N_steps) for _ in eachindex(scaled_data)]
+        # the same interpolation as the quality function
+        yvals = [
+            _interpolate(sp.quality.interp, xs[l], ys[l], collect(xvals[l]))
+            for l in eachindex(scaled_data)
+        ]
         evals = [zeros(sp.quality.N_steps) for _ in eachindex(scaled_data)]
 
         for l in eachindex(scaled_data)
             for (i, x) in enumerate(xvals[l])
-                yvals[l][i] = y_splines[l](x)
                 evals[l][i] = e_splines[l](x)
             end
         end

@@ -1,7 +1,8 @@
 """
-    MultipleSplines(; N_steps::Int=100, weight_density::Bool=true)
+    MultipleSplines(; N_steps::Int=100, weight_density::Bool=true, interp::Symbol=:pchip)
 
-Quality function that uses a spline interpolation to calculate the quality of a scaling.
+Quality function that interpolates the scaled data of every system size separately and
+compares the interpolated curves.
 
 # How does it work?
 TO BE DOCUMENTED
@@ -10,15 +11,31 @@ TO BE DOCUMENTED
 - `N_steps::Int=100`: Number of points used in the interval to calculate the quality.
 - `weight_density::Bool=true`: If `true`, the quality is weighted by the density of data
   points in the interval.
+- `interp::Symbol=:pchip`: How the data of each system size are interpolated.
+    - `:pchip` (default): monotone piecewise-cubic Hermite interpolation (Fritsch–Carlson).
+      It never overshoots between data points, so closely spaced noisy points (e.g. on an
+      irregular x grid) do not make the interpolant oscillate. A local extremum of the
+      interpolant always lies on a data point, so peaks are cut off at the highest data point.
+    - `:cubic`: cubic interpolating spline (Dierckx). It is more accurate for noise-free
+      data, especially for master curves with peaks or several extrema, but it oscillates
+      for noisy data on irregular grids. It needs at least 4 data points per system size.
 """
 struct MultipleSplines <: QualityFunction
     N_steps::Int
     weight_density::Bool
     scan_mode::Bool
-    function MultipleSplines(; N_steps::Int=100, weight_density=true, scan_mode=false)
-        new(N_steps, weight_density, scan_mode)
+    interp::Symbol
+    function MultipleSplines(; N_steps::Int=100, weight_density=true, scan_mode=false,
+        interp::Symbol=:pchip)
+        interp in (:pchip, :cubic) || throw(ArgumentError(
+            "interp must be :pchip or :cubic, got :$(interp)."
+        ))
+        new(N_steps, weight_density, scan_mode, interp)
     end
 end
+
+# minimum number of data points per system size
+min_points(sqf::MultipleSplines) = sqf.interp === :cubic ? 4 : 2
 
 
 ##### MultipleSplines Quality Function #####
@@ -46,33 +63,86 @@ function (sqf::MultipleSplines)(sp, parameters; check_bounds=false)
         sp.dx[2]
     )
 
-    # check whether the constructed optimization interval is valid
-    interval[1] > interval[2] && return Inf
+    # check whether the constructed optimization interval is valid (also rejects NaN)
+    interval[1] <= interval[2] || return Inf
 
 
     # calculate S
     S = 0.0
     if sp.errors_defined && !sqf.scan_mode
-        S = _S_weighted(scaled_data, interval, sqf.N_steps, sqf.weight_density)
+        S = _S_weighted(scaled_data, interval, sqf.N_steps, sqf.weight_density, sqf.interp)
     else
-        S = _S_unweighted(scaled_data, interval, sqf.N_steps)
+        S = _S_unweighted(scaled_data, interval, sqf.N_steps, sqf.interp)
     end
 
     return S
 end
 
-function _S_unweighted(scaled_data, interval, N_steps)
+# interpolated y values of one system size at the sorted points xs_eval
+function _interpolate(interp::Symbol, xs, ys, xs_eval)
+    interp === :cubic && return evaluate(Spline1D(xs, ys, k=3), xs_eval)
+    return _pchip(xs, ys, xs_eval)
+end
 
-    # create spline for each system size
-    y_splines = [
-        Spline1D(scaled_data[i].xs, scaled_data[i].ys, k=3) for i in eachindex(scaled_data)
-    ]
+# Monotone piecewise-cubic Hermite interpolation (Fritsch & Carlson 1980), with the slopes of
+# Fritsch & Butland (1984) as in Moler's pchip: at an interior point the slope is a weighted
+# harmonic mean of the two adjacent secant slopes, or zero if they differ in sign (the point
+# is a local extremum of the data). The end slopes are one-sided three-point estimates,
+# limited to keep the shape. Outside [xs[1], xs[end]] the end cubics are extrapolated.
+function _pchip(xs, ys, xs_eval)
+    n = length(xs)
+    d = Vector{Float64}(undef, n)
+    if n == 2
+        d[1] = d[2] = (ys[2] - ys[1]) / (xs[2] - xs[1])
+    else
+        h_prev = xs[2] - xs[1]
+        δ_prev = (ys[2] - ys[1]) / h_prev
+        for i in 2:n-1
+            h = xs[i+1] - xs[i]
+            δ = (ys[i+1] - ys[i]) / h
+            if δ_prev * δ > 0
+                w1, w2 = 2h + h_prev, h + 2h_prev
+                d[i] = (w1 + w2) / (w1 / δ_prev + w2 / δ)
+            else
+                d[i] = 0.0
+            end
+            h_prev, δ_prev = h, δ
+        end
+        h1, h2 = xs[2] - xs[1], xs[3] - xs[2]
+        d[1] = _pchip_end_slope(h1, h2, (ys[2] - ys[1]) / h1, (ys[3] - ys[2]) / h2)
+        h1, h2 = xs[n] - xs[n-1], xs[n-1] - xs[n-2]
+        d[n] = _pchip_end_slope(h1, h2, (ys[n] - ys[n-1]) / h1, (ys[n-1] - ys[n-2]) / h2)
+    end
+
+    vals = similar(xs_eval, Float64)
+    i = 1
+    for (k, x) in enumerate(xs_eval)
+        # the interval [xs[i], xs[i+1]] that contains x (xs_eval is sorted)
+        while i < n - 1 && x >= xs[i+1]
+            i += 1
+        end
+        h = xs[i+1] - xs[i]
+        t = (x - xs[i]) / h
+        vals[k] = (2t^3 - 3t^2 + 1) * ys[i] + (t^3 - 2t^2 + t) * h * d[i] +
+                  (-2t^3 + 3t^2) * ys[i+1] + (t^3 - t^2) * h * d[i+1]
+    end
+    return vals
+end
+
+function _pchip_end_slope(h1, h2, δ1, δ2)
+    s = ((2h1 + h2) * δ1 - h1 * δ2) / (h1 + h2)
+    sign(s) != sign(δ1) && return 0.0
+    (sign(δ1) != sign(δ2) && abs(s) > abs(3δ1)) && return 3δ1
+    return s
+end
+
+function _S_unweighted(scaled_data, interval, N_steps, interp)
 
     xvals = range(interval[1], interval[2], length=N_steps)
     xs_eval = collect(xvals)
     yvals = zeros(N_steps, length(scaled_data))
     for l in eachindex(scaled_data)
-        yvals[:, l] = evaluate(y_splines[l], xs_eval)
+        yvals[:, l] = _interpolate(interp, scaled_data[l].xs, scaled_data[l].ys, xs_eval)
     end
 
     # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
@@ -97,12 +167,9 @@ function _S_unweighted(scaled_data, interval, N_steps)
     return S
 end
 
-function _S_weighted(scaled_data, interval, N_steps, weight_density)
+function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
 
-    # create spline for each system size
-    y_splines = [
-        Spline1D(scaled_data[i].xs, scaled_data[i].ys, k=3) for i in eachindex(scaled_data)
-    ]
+    # linear interpolation of the error bars of each system size
     e_splines = [
         Spline1D(scaled_data[i].xs, scaled_data[i].es, k=1) for i in eachindex(scaled_data)
     ]
@@ -123,7 +190,7 @@ function _S_weighted(scaled_data, interval, N_steps, weight_density)
     yvals = Matrix{Float64}(undef, n, N_steps)
     evals = Matrix{Float64}(undef, n, N_steps)  # uncertainties of the spline values
     for l in eachindex(scaled_data)
-        yvals[l, :] = evaluate(y_splines[l], xs_eval)
+        yvals[l, :] = _interpolate(interp, scaled_data[l].xs, scaled_data[l].ys, xs_eval)
         # add small number to avoid division by zero
         evals[l, :] = evaluate(e_splines[l], xs_eval) .+ 1e-6
     end

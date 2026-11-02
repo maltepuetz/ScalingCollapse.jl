@@ -48,8 +48,8 @@ function (sqf::SingleSpline)(sp, parameters; check_bounds=false)
         sp.dx[2]
     )
 
-    # check whether the constructed optimization interval is valid
-    interval[1] > interval[2] && return Inf
+    # check whether the constructed optimization interval is valid (also rejects NaN)
+    interval[1] <= interval[2] || return Inf
 
     # collect all data points in the interval -- fitting the spline to points outside of it
     # would make its flexibility inside the interval depend on the scaling parameters

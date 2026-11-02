@@ -11,8 +11,10 @@
     Ls = [1, 2, 3]
     x = collect(-3:0.1:3)
     ys = [tanh.(x) .+ 0.01 .* sin.(7 * L .* x) for L in Ls]
+    # h = 0 at p = -1 and near p = -1.07; the expected values were found with the Linear
+    # quality (the default of that time), which prefers the root near -1.07
     problem(starting_ps; kwargs...) = ScalingProblem([x for _ in Ls], ys, Ls;
-        sf=sf, starting_ps=starting_ps, kwargs...,
+        sf=sf, starting_ps=starting_ps, quality=Linear(), kwargs...,
     )
 
     @testset "two minima" begin
