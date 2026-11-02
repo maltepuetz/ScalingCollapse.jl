@@ -1,3 +1,6 @@
+using Random
+
+
 @testset "Quality functions" begin
 
     @testset "Linear with coinciding scaled x values" begin
@@ -12,7 +15,7 @@
         for (label, args) in (("without errors", (xs, ys, Ls)), ("with errors", (xs, ys, es, Ls)))
             @testset "$label" begin
                 sp = ScalingProblem(args...;
-                    sf=ScalingFunction(:x), starting_ps=[0.5, 1.0], error=false,
+                    sf=ScalingFunction(:x), quality=Linear(), starting_ps=[0.5, 1.0], error=false,
                 )
                 for nu in (0.5, 1.0, 1.5)
                     @test isfinite(sp.quality(sp, [0.5, nu]))
@@ -31,7 +34,7 @@
         # the sorted points x = 2, 3, 4, 5
         x1, x2 = [0.0, 2.0, 4.0, 6.0], [1.0, 3.0, 5.0, 7.0]
         sp = ScalingProblem([x1, x2], [x1 .^ 2, x2 .^ 2], [1, 2];
-            sf=ScalingFunction((d, p1, p2) -> d; N_parameters=2),
+            sf=ScalingFunction((d, p1, p2) -> d; N_parameters=2), quality=Linear(),
             starting_ps=[1.0, 1.0], error=false, dx=[-10, 10],
         )
         # interior points: ybar(3) = 10, ybar(4) = 17 -> S = (1 + 1) / 2
@@ -78,5 +81,51 @@
         sp = shift_problem([1, 2, 3])
         @test isfinite(SingleSpline()(sp, [0.0, 1.0]))
         @test SingleSpline()(sp, [2.0, 1.0]) == Inf
+    end
+
+    @testset "MultipleSplines pchip interpolation" begin
+        pchip = ScalingCollapse._pchip
+        rng = Xoshiro(11)
+        xs = sort!(rand(rng, 15))
+        dense = collect(range(xs[1], xs[end], length=2001))
+        # exact at the data points and for linear data
+        ys = sin.(6xs)
+        @test pchip(xs, ys, xs) ≈ ys atol = 1e-14
+        @test pchip(xs, 2 .* xs .+ 1, dense) ≈ 2 .* dense .+ 1
+        # monotone data give a monotone interpolant without overshoot
+        ys = cumsum(rand(rng, 15))
+        vals = pchip(xs, ys, dense)
+        @test all(diff(vals) .>= 0)
+        @test extrema(vals) == (ys[1], ys[end])
+        # a peak is cut off at the highest data point, and flat stretches stay flat
+        ys = exp.(-(xs .- 0.5) .^ 2 ./ 0.02)
+        @test maximum(pchip(xs, ys, sort!(vcat(dense, xs)))) == maximum(ys)
+        @test pchip([1.0, 2, 3, 4, 5], [0.0, 0, 0, 1, 1], collect(1:0.01:3)) == zeros(201)
+        # two points: linear
+        @test pchip([0.0, 2.0], [1.0, 5.0], [0.0, 0.5, 2.0]) ≈ [1.0, 2.0, 5.0]
+        # converges (at second order) for smooth data
+        f(x) = exp(-x^2)
+        err(n) = (x = collect(range(-2.5, 2.5, length=n)); z = collect(range(-2.5, 2.5, length=1001));
+            maximum(abs, pchip(x, f.(x), z) .- f.(z)))
+        @test err(64) < err(16) / 10 && err(64) < 2e-3
+
+        @test_throws ArgumentError MultipleSplines(interp=:linear)
+        @test MultipleSplines().interp === :pchip
+    end
+
+    @testset "MultipleSplines pchip on an irregular grid" begin
+        # noisy data at random x values: the cubic spline oscillates between close points,
+        # pchip does not
+        rng = Xoshiro(2)
+        Ls = [16, 32, 64, 128]
+        xs = [sort!(0.7 .* (1 .+ (5 .* rand(rng, 30) .- 2.5) .* L^(-1 / 1.2))) for L in Ls]
+        ys = [1 .+ tanh.((x .- 0.7) ./ 0.7 .* L^(1 / 1.2)) for (x, L) in zip(xs, Ls)]
+        ys = [y .* (1 .+ 0.01 .* randn(rng, length(y))) for y in ys]
+        es = [0.01 .* abs.(y) for y in ys]
+        sp = ScalingProblem(xs, ys, es, Ls; sf=ScalingFunction(:x),
+            p_space=[0.56:0.01:0.88, 0.3:0.05:3.0])
+        @test sp.quality.interp === :pchip
+        @test abs(sp.optimal_ps[1] - 0.7) <= 3 * sp.optimal_ps_error[1]
+        @test abs(sp.optimal_ps[2] - 1.2) <= 3 * sp.optimal_ps_error[2]
     end
 end

@@ -107,12 +107,12 @@ end
             scaled_data = _random_scaled_data(rng, n_sizes)
             N_steps = rand(rng, (10, 57, 100))
             @test isequal(
-                ScalingCollapse._S_unweighted(scaled_data, interval, N_steps),
+                ScalingCollapse._S_unweighted(scaled_data, interval, N_steps, :cubic),
                 _S_unweighted_reference(scaled_data, interval, N_steps),
             )
             for weight_density in (true, false)
                 @test isequal(
-                    ScalingCollapse._S_weighted(scaled_data, interval, N_steps, weight_density),
+                    ScalingCollapse._S_weighted(scaled_data, interval, N_steps, weight_density, :cubic),
                     _S_weighted_reference(scaled_data, interval, N_steps, weight_density),
                 )
             end
@@ -123,11 +123,11 @@ end
             fill(first(_random_scaled_data(rng, 1)), 3),
         )
             @test isequal(
-                ScalingCollapse._S_weighted(scaled_data, interval, 100, true),
+                ScalingCollapse._S_weighted(scaled_data, interval, 100, true, :cubic),
                 _S_weighted_reference(scaled_data, interval, 100, true),
             )
             @test isequal(
-                ScalingCollapse._S_unweighted(scaled_data, interval, 100),
+                ScalingCollapse._S_unweighted(scaled_data, interval, 100, :cubic),
                 _S_unweighted_reference(scaled_data, interval, 100),
             )
         end
@@ -139,13 +139,14 @@ end
         xs = [collect(range(0.3, 0.7, length=60)) for _ in Ls]
         ys = [tanh.((x .- 0.5) ./ 0.5 .* L) .* L^0.1 .+ 0.01 .* randn(rng, 60) for (x, L) in zip(xs, Ls)]
         es = [fill(0.01, 60) for _ in Ls]
-        sp = ScalingProblem(xs, ys, es, Ls; sf=ScalingFunction(:xy), quality=MultipleSplines(),
-            starting_ps=[0.5, 1.0, 0.1], error=false)
+        sp = ScalingProblem(xs, ys, es, Ls; sf=ScalingFunction(:xy),
+            quality=MultipleSplines(interp=:cubic), starting_ps=[0.5, 1.0, 0.1], error=false)
         for ps in ([0.5, 1.0, 0.1], [0.49, 1.1, 0.12], [0.51, 0.9, 0.05])
             scaled = [sp.sf.f(d, ps...) for d in sp.data]
             interval = [maximum(d.xs[1] for d in scaled), minimum(d.xs[end] for d in scaled)]
-            @test isequal(MultipleSplines()(sp, ps), _S_weighted_reference(scaled, interval, 100, true))
-            @test isequal(MultipleSplines(scan_mode=true)(sp, ps),
+            @test isequal(MultipleSplines(interp=:cubic)(sp, ps),
+                _S_weighted_reference(scaled, interval, 100, true))
+            @test isequal(MultipleSplines(scan_mode=true, interp=:cubic)(sp, ps),
                 _S_unweighted_reference(scaled, interval, 100))
         end
     end
@@ -184,7 +185,7 @@ end
         small, large = problem(50), problem(500)
         # (a fixed number of knots: the spline fit itself allocates more for more knots)
         for q in (Linear(), SingleSpline(N_knots=10), MultipleSplines(),
-            MultipleSplines(scan_mode=true))
+            MultipleSplines(scan_mode=true), MultipleSplines(interp=:cubic))
             n_small = _allocations(q, small, [0.5, 1.0])
             n_large = _allocations(q, large, [0.5, 1.0])
             @test n_large < 2 * n_small

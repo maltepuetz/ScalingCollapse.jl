@@ -55,8 +55,12 @@
         @test_throws ArgumentError ScalingProblem(
             vcat(Ts, Ts[end]), vcat(binder, binder[end:end, :]), Ls; sf=sf,
         )
-        # MultipleSplines needs at least 4 points per system size
-        @test_throws ArgumentError ScalingProblem(Ts[1:3], binder[1:3, :], Ls; sf=sf)
+        # cubic splines need at least 4 points per system size, pchip 2
+        @test_throws ArgumentError ScalingProblem(Ts[1:3], binder[1:3, :], Ls; sf=sf,
+            quality=MultipleSplines(interp=:cubic))
+        @test_throws ArgumentError ScalingProblem(Ts[1:3], binder[1:3, :], Ls; sf=sf,
+            quality_scan=MultipleSplines(scan_mode=true, interp=:cubic))
+        @test_throws ArgumentError ScalingProblem(Ts[1:1], binder[1:1, :], Ls; sf=sf)
     end
 
     @testset "invalid custom scaling functions" begin
@@ -98,7 +102,7 @@
         )
         # too few points for the Linear quality function
         @test_throws ErrorException ScalingProblem(Ts, binder, Ls;
-            sf=sf, dx=[0.0, 1e-9], starting_ps=[2.27, 1.0],
+            sf=sf, dx=[0.0, 1e-9], starting_ps=[2.27, 1.0], quality=Linear(),
         )
     end
 

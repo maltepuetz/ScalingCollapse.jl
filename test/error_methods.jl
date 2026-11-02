@@ -20,15 +20,17 @@ struct UserSimplexer <: ScalingCollapse.Optim.Simplexer end
 @testset "error methods" begin
     # Fixtures recorded on main before the profile-error work: the default error of that time is
     # now `error=:conditional`. Compared with rtol (not ==) because the literals come from one
-    # machine and CI also runs aarch64 and 32-bit. The fixtures use the relative form of x, the
-    # default of that time.
+    # machine and CI also runs aarch64 and 32-bit. The fixtures use the relative form of x and
+    # the quality functions of that time (Linear, and the cubic-spline scan), which were the
+    # defaults then.
+    old = (quality=Linear(), quality_scan=MultipleSplines(scan_mode=true, interp=:cubic))
     @testset "conditional errors unchanged" begin
         # README Ising fit (Ts, binder, Ls come from ising.jl)
         sp = ScalingProblem(Ts, binder, Ls;
             sf=ScalingFunction(:x; p_names=["T_c", "nu"], relative=true),
             p_space=[2.0:0.1:2.4, 0.5:0.1:1.5],
             dx=[-1.0, 1.0],
-            error=:conditional,
+            error=:conditional, old...,
         )
         @test isapprox(sp.optimal_ps_error, [0.0016435929762187492, 0.019317580143210902]; rtol=1e-8)
 
@@ -41,7 +43,7 @@ struct UserSimplexer <: ScalingCollapse.Optim.Simplexer end
             sf=ScalingFunction(:xny, p_names=["x_c", "nu", "gamma"], nu=1, relative=true),
             p_space=[5:0.1:7, 1:0.1:3],
             dx=[-2, 2],
-            error=:conditional,
+            error=:conditional, old...,
         )
         @test isapprox(sp.optimal_ps_error, [0.03172257936100857, 0.03636215786455168]; rtol=1e-8)
 
@@ -53,7 +55,7 @@ struct UserSimplexer <: ScalingCollapse.Optim.Simplexer end
                 sf=ScalingFunction(:xy; relative=true),
                 p_space=[0.48:0.002:0.52, 0.8:0.1:2.0, 0.05:0.025:0.3],
                 dx=[-1.0, 1.0],
-                error=:conditional,
+                error=:conditional, old...,
             )
             @test isapprox(sp.optimal_ps_error,
                 [0.00010935007760675173, 0.013050655089099956, 0.003100701294555539]; rtol=1e-8)
@@ -69,8 +71,7 @@ struct UserSimplexer <: ScalingCollapse.Optim.Simplexer end
                 sf=ScalingFunction(:xy; relative=true),
                 p_space=[0.5:0.01:0.9, 0.6:0.1:2.0, 0.0:0.05:0.6],
                 dx=[-1.5, 1.5],
-                quality=Linear(),
-                error=:conditional,
+                error=:conditional, old...,
             )
             @test isapprox(sp.optimal_ps_error,
                 [3.0086057594151985e-5, 0.002085947931419029, 0.000520178097105716]; rtol=1e-8)
@@ -187,8 +188,9 @@ struct UserSimplexer <: ScalingCollapse.Optim.Simplexer end
         end
 
         @testset "profile with starting_ps" begin
+            # the reference errors below are for the Linear quality (the default of that time)
             kw = (sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
-                starting_ps=[2.27, 1.0], dx=[-2.0, 2.0])
+                starting_ps=[2.27, 1.0], dx=[-2.0, 2.0], quality=Linear())
             sp_profile = ScalingProblem(Ts, binder, Ls; kw..., error=:profile)
             sp_conditional = ScalingProblem(Ts, binder, Ls; kw..., error=:conditional)
             @test at_least_conditional(sp_profile.optimal_ps_error,

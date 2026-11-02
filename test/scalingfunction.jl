@@ -106,6 +106,9 @@
 
 
     @testset "collapses with p_c = 0 and p_c < 0" begin
+        # the tolerances were set with the Linear quality (the default of that time); on these
+        # sparsely sampled steep curves MultipleSplines gives ν about 5% (1.4–2σ) off
+        q = (quality=Linear(),)
         Ls_syn = [8, 16, 32, 64]
         xs_syn = collect(-1.0:0.02:1.0)
         # small deterministic noise, so that the quality minimum is not zero
@@ -116,7 +119,7 @@
         sp = ScalingProblem(xs_syn, ys_syn, Ls_syn;
             sf=ScalingFunction(:x; p_names=["p_c", "nu"]),
             p_space=[-0.5:0.1:0.5, 0.5:0.1:2.0],
-            dx=[-2.0, 2.0],
+            dx=[-2.0, 2.0], q...,
         )
         @test isapprox(sp.optimal_ps[1], 0.0; atol=1e-3)
         @test isapprox(sp.optimal_ps[2], 1.0; atol=2e-2)
@@ -130,7 +133,7 @@
         sp = ScalingProblem(xs_syn, ys_syn, Ls_syn;
             sf=ScalingFunction(:xy; p_names=["p_c", "nu", "b"]),
             p_space=[-0.5:0.1:0.0, 0.5:0.1:1.5, 0.0:0.05:0.3],
-            dx=[-2.0, 2.0],
+            dx=[-2.0, 2.0], q...,
         )
         @test isapprox(sp.optimal_ps[1], pc; atol=1e-3)
         @test isapprox(sp.optimal_ps[2], nu; atol=2e-2)
