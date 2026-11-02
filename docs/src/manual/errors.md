@@ -95,11 +95,26 @@ fig
 
 !!! note "What the threshold widths mean"
     Profile and conditional errors are widths defined by a threshold on the quality, not
-    standard deviations with a known coverage. The default threshold 1.3 is a convention: it
-    is not calibrated against the noise of the data, and the widths do not shrink with the
-    error bars in a statistically defined way. They are useful to compare fits and to judge
-    how well the data constrain a parameter. Change the threshold with `error_threshold`
+    standard deviations with a known coverage. The quality is quadratic around its minimum,
+    so the width grows as ``\sqrt{t - 1}`` with the threshold ``t``: halving the error
+    takes ``t = 1.075`` instead of 1.3. Change the threshold with `error_threshold`
     (one number, or one per free parameter).
+
+    The default 1.3 is a convention. In a benchmark on synthetic data with known parameters
+    (about 3700 fits of monotone curves and peaks, with and without error bars):
+    - If the data deviate from scaling only by noise, the widths are about 4 times the
+      statistical error, i.e. the scatter of the fitted parameters between independent
+      noisy data sets. A threshold of about ``1 + 2/N``, with ``N`` the number of data
+      points in the overlap window, would match it. Since the default is a fixed ratio, the
+      widths do not shrink when more points are added.
+    - With corrections to scaling, the deviation from the true parameters is often larger
+      than the statistical error. On the test cases with exactly known parameters, the
+      deviations at 1.3 are typically about one width, and up to about four.
+
+    So the default widths are a conservative estimate of the statistical error and of the
+    order of the systematic deviation of typical data, but no bound on it. They are useful
+    to compare fits and to judge how well the data constrain a parameter. For a statistical
+    error, use `error=:bootstrap` (needs error bars).
 
 ### When the profile finds a better fit
 

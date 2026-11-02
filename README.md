@@ -77,7 +77,8 @@ examples with plots, and the API reference.
 
 ## Status and contributing
 
-ScalingCollapse.jl is still young: expect breaking changes between minor versions. Bug
+ScalingCollapse.jl is still young: expect breaking changes between minor versions. The
+[changelog](CHANGELOG.md) lists them, with migration notes. Bug
 reports, questions and suggestions are welcome as
 [issues](https://github.com/maltepuetz/ScalingCollapse.jl/issues).
 
