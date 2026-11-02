@@ -1,0 +1,47 @@
+name: Changelog
+on:
+  pull_request:
+    # `labeled`/`unlabeled` are required: adding `skip-changelog` must re-run
+    # this check so it can turn green without a new push.
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+jobs:
+  changelog:
+    # This job is a required status check, so it must always run and always
+    # report a real conclusion. The `skip-changelog` override is therefore
+    # applied inside the step, never as a job-level `if:` and never as a
+    # workflow-level `paths:` filter -- a job that never reports leaves the
+    # pull request pending forever instead of mergeable.
+    name: CHANGELOG.md entry
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Require a CHANGELOG.md entry
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+
+          # Captured into variables rather than piped into `grep -q`: under
+          # `pipefail`, grep exits at the first match and can SIGPIPE `gh`,
+          # which would turn a match into a failed pipeline -- reading as
+          # "no match" and passing every pull request.
+          labels=$(gh pr view "$PR" --repo "$REPO" --json labels --jq '.labels[].name')
+          files=$(gh pr view "$PR" --repo "$REPO" --json files --jq '.files[].path')
+
+          if grep -qx 'skip-changelog' <<<"$labels"; then
+            echo "::notice::'skip-changelog' label present -- no CHANGELOG.md entry required."
+            exit 0
+          fi
+
+          if grep -qx 'CHANGELOG.md' <<<"$files"; then
+            echo "::notice::CHANGELOG.md updated."
+            exit 0
+          fi
+
+          echo "::error::This pull request does not update CHANGELOG.md. Add an entry under the '## Unreleased' heading, or apply the 'skip-changelog' label if the change is not user-facing."
+          exit 1
