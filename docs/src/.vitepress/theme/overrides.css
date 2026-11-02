@@ -1,0 +1,31 @@
+/* Override default DocumenterVitepress styles here.
+   This file is loaded after style.css, so rules here take precedence.
+
+   DocumenterVitepress substitutes its default only for theme files that are
+   absent from docs/src/.vitepress/theme/, so the other theme files still come
+   from the installed version. */
+
+/* Hero glow behind the logo. The default gradients have hard color stops (two
+   stops at 30%) and, in dark mode, a gray close to the page background. Under
+   the large blur filter these render differently depending on how the browser
+   paints the element: the page looks different on first load than after
+   toggling the theme. Smooth gradients look the same either way.
+
+   The glow is one radial blob per dot of the logo (purple top right, green in
+   the middle, red bottom left). Each blob fades out well inside the element,
+   a disc of up to 320px, so the blur shows no round edge. */
+:root {
+  --vp-home-hero-image-background-image:
+    radial-gradient(circle at 72% 28%, #aa79c199, transparent 40%),
+    radial-gradient(circle at 50% 50%, #389826b3, transparent 50%),
+    radial-gradient(circle at 28% 72%, #d5635c99, transparent 40%);
+  /* On white, the default blur of up to 72px mixes the three colors to green. */
+  --vp-home-hero-image-filter: blur(44px);
+}
+
+:root.dark {
+  --vp-home-hero-image-background-image:
+    radial-gradient(circle at 72% 28%, #9558b26b, transparent 40%),
+    radial-gradient(circle at 50% 50%, #38982685, transparent 40%),
+    radial-gradient(circle at 28% 72%, #cb3c336b, transparent 40%);
+}
