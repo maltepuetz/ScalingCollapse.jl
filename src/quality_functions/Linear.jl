@@ -2,15 +2,25 @@
 """
     Linear()
 
-Quality function that interpolates all scaled data points to a single master curve. For
-every data point, we take the closest data points, to the left and to the right to
-interpolate a linear function. The quality is then calculated as the sum of the squared
-differences between the data points and the interpolated values.
+Quality function that measures the distance of every data point to the line between its
+neighbours, with the points of all system sizes merged.
+
+# How it works
+All rescaled data points in the window where all sizes overlap (intersected with `dx`) are
+sorted by x. Every point `i` except the first and the last is compared with the linear
+interpolation `ȳ_i` between its left and right neighbour, which usually belong to other
+system sizes. The quality is the mean squared deviation,
+
+    S = 1/(n - 2) Σ_i (y_i - ȳ_i)²,
+
+or, with error bars, the mean of `(y_i - ȳ_i)² / (e_i² + w_l² e_{i-1}² + w_r² e_{i+1}²)`,
+with the interpolation weights `w_l` and `w_r` of the neighbours. This was the default
+quality function up to version 0.2.
 
 # Limitations
 The quality is piecewise: it jumps whenever scaled points of different sizes swap order in x
 (the neighbour of a third point changes from one size to the other) and whenever a point
-enters or leaves the interval. It also dips where the scaled x grids of the sizes line up:
+enters or leaves the window. It also dips where the scaled x grids of the sizes line up:
 near-coincident points of different sizes are compared with each other without interpolation
 error. On uniformly gridded data this gives false minima. For example:
 - percolation data on a grid uniform in `(p - 1/2) L^{0.7}`: the quality changes abruptly at
@@ -20,8 +30,9 @@ error. On uniformly gridded data this gives false minima. For example:
   `T_c`, the quality oscillates by about ±50% every 0.02 in `ν`, with 19 local minima for
   `ν` in `[0.8, 1.1]`.
 `Houdayer` and `SingleSpline` show the same kind of ruggedness. For uniformly gridded data,
-prefer `MultipleSplines`, which compares smooth interpolations of every size and gives a
-smooth quality, and check a fit by scanning the quality around it with [`residuals`](@ref).
+prefer [`MultipleSplines`](@ref), which compares smooth interpolations of every size and
+gives a smooth quality, and check a fit by scanning the quality around it with
+[`residuals`](@ref).
 """
 struct Linear <: QualityFunction end
 

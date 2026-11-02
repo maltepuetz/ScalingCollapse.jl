@@ -1,42 +1,35 @@
 """
-    residuals(sp; kwargs...)
+    residuals(sp::ScalingProblem; p_space, N_steps=51, dims) -> (p_space, S)
 
-Calculate the residuals of the `ScalingProblem` around the optimal parameters or for a
-given parameter space.
+Evaluate the quality function `sp.quality` on a grid of free parameters, e.g. to plot the
+quality landscape around a fit or to check that a minimum is not a numerical artifact.
 
-# Arguments
-- `sp::ScalingProblem`: The `ScalingProblem` to calculate the residuals for.
+Returns the ranges of the active dimensions and the array `S` of quality values, with one
+axis per active dimension: `S[i, j, ...]` belongs to `p_space[1][i]`, `p_space[2][j]`, ...
+The parameters of the other dimensions stay at their values in `sp.optimal_ps`. The
+parameters are not checked against the `p_space` of `sp`.
 
-# Keyword Arguments
-- `p_space::Vector{Vector{Float64}}`: The parameter space to calculate the residuals for.
-    If not provided, the parameter space is calculated from the optimal parameters,
-    their errors and the number of steps.
-- `N_steps::Int=50`: The number of steps to use for the default parameter space.
-- `dims::Vector{Int}=[1, ...]`: The dimensions to calculate the residuals for. If not
-    specified, all dimensions are used.
+# Keyword arguments
+- `dims::Vector{Int}=1:n`: the indices of the active free parameters (in the order of
+    `ScalingCollapse.scaled_p_names(sp.sf)`), e.g. `dims=[1, 2]` for a 2D cut through a
+    problem with three free parameters.
+- `p_space`: one range per free parameter; the ranges of inactive dimensions are ignored.
+    By default, every active parameter spans `optimal_ps ± 3 optimal_ps_error` with
+    `N_steps` points, which needs finite, nonzero errors.
+- `N_steps::Int=51`: the number of points per dimension of the default `p_space`.
 
-# Returns
-- `p_space::Vector{StepRangeLen}`: The parameter space used for the calculation.
-- `residuals::Array{Float64}`: The residuals for the given parameter space.
-
-# Example
+# Examples
 ```julia
-# lets say our xs, ys and Ls are data for the susceptibility of the Ising model
-using ScalingCollapse
-sp = ScalingProblem(xs, ys, Ls;
-    sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
-    dx=[-1.0, 2.0],
-)
+sp = ScalingProblem(Ts, chi, Ls; sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]))
 
-# now we can calculate the residual landscape around the optimal parameters as follows:
-p_space, residuals = residuals(sp)
-# in the above case length(p_space) == 3 and size(residuals) == (50, 50, 50)
+# 3D landscape: length(ps) == 3, size(S) == (51, 51, 51)
+ps, S = residuals(sp)
 
-# we can specify the dimensions we are interested in as follows:
-p_space, residuals = residuals(sp; dims=[1, 2])
-# now length(p_space) == 2 and size(residuals) == (50, 50)
-# we fixed the third parameter (in this case gamma) to its optimal value and calculated
-# a 2D cut through the 3D residual landscape
+# 2D cut in T_c and nu, with gamma at its optimum
+ps, S = residuals(sp; dims=[1, 2], N_steps=101)
+
+# 1D cut along nu on a given range
+ps, S = residuals(sp; dims=[2], p_space=[0:0, 0.8:0.005:1.2, 0:0])
 ```
 """
 function residuals(sp; kwargs...)  # p_space, N_steps=50, dims

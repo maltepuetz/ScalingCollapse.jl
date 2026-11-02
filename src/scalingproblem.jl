@@ -1,173 +1,161 @@
 """
-    ScalingProblem(args...; kwargs...)
+    ScalingProblem(xs, ys, Ls; kwargs...)
+    ScalingProblem(xs, ys, es, Ls; kwargs...)
 
-Create a scaling problem which solves on initialization.
+Find the parameters of a scaling function that collapse the data `ys(xs)` of all system
+sizes `Ls` onto one master curve.
 
-# Arguments
-- `xs`: x values of the data
-- `ys`: y values of the data
-- `es`: y error values of the data (optional)
-- `Ls`: system sizes of the data
-For more information on the arguments, see methods(ScalingCollapse.unzip_data).
+The constructor solves the problem right away: it scans `p_space` for minima of the quality
+function, refines the best one with Nelder–Mead and estimates the error of every free
+parameter. The results are stored in the returned object:
 
-# Keyword Arguments
-- `sf::ScalingFunction=ScalingFunction(preset; kwargs...)`: scaling function
-- `p_space::Vector{StepRangeLen}=[0.1:0.1:3.0 for _ in sf.p_names]`: parameter search space
-- `dx::Vector{Float64}=[-Inf, Inf]`: optimization interval
-- `quality::QualityFunction=MultipleSplines()`: quality function
-- `quality_scan::QualityFunction=MultipleSplines(scan_mode=true)`: quality function for the
-    parameter space scan (it is highly recommended to use the default function here)
-- `verbose::Bool=false`: print information during optimization
-- `starting_ps::Union{Vector{<:Real},Vector{<:Vector{<:Real}}}`: If `starting_ps` are
-    given, there will be no initial parameter space scan. Instead, the optimization will
-    start at the given point. This is much faster, but might not find the global minimum.
-    To try several starting points, pass a vector of them (e.g.
-    `starting_ps=[[0.49, 1.2], [0.50, 1.35]]`): the optimization runs from each of them,
-    the fit with the lowest finite quality is kept (starts without a finite quality are
-    skipped), and the error analysis runs once on that fit.
-- `error::Union{Bool,Symbol}=true`: error analysis method. `true`/`:profile` (default),
-    `:conditional`, `:bootstrap`, or `false` (no error analysis); anything else throws an
-    `ArgumentError`.
-    With `:profile`, the error of a free parameter is a local profile width: the parameter
-    is displaced from its optimum, all other free parameters are re-fitted (inside
-    `p_space`) at every displacement, and the error is the larger of the two displacements
-    (one on each side) at which the re-fitted quality first reaches `error_threshold` times
-    its minimum when moving outward from the fit. The profiled parameter itself is not
-    bounded by `p_space`. With `:conditional`, the other parameters are held at their
-    optimal values instead, which ignores correlations between parameters and gives smaller
-    or equal errors (equal with one free parameter or uncorrelated parameters). With one free parameter both methods agree. An error is `NaN` if the threshold
-    is never reached or the quality becomes undefined (no overlap within `dx`) first. If the
-    profile finds a quality lower than the minimum inside `p_space`, the fit is re-optimized
-    from there and the analysis restarts (up to 3 times, with a warning), so `optimal_ps`
-    and `minimum` can change during the error analysis. If the restarts run out, all errors
-    are `NaN`. A lower quality outside `p_space` gives `NaN` for that parameter and a
-    warning that `p_space` may need widening. With `error=:profile`, `optimizer` and
-    `optimizer_options` (including `time_limit`, `show_trace` and `callback`) also apply to
-    every inner fit of the error analysis. With an `Optim.AffineSimplexer` (the default),
-    every inner fit is followed by a refit with one initial step per re-fitted parameter
-    equal to its conditional error, so that quality valleys much narrower than the affine
-    steps are resolved; any other initial simplex is used alone. The errors are widths defined by a quality
-    threshold, not standard deviations with a known coverage. Profiling accounts for
-    correlations between parameters, but the threshold is not calibrated and correlated
-    data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.
-    With `:bootstrap`, the error of a free parameter is a standard deviation: `n_bootstrap`
-    synthetic datasets are drawn by replacing every y value with a Gaussian random number
-    centred on it with its error bar as width, each one is re-fitted (Nelder-Mead from
-    `optimal_ps`, inside `p_space`, with `optimizer` and `optimizer_options`), and the error
-    is the standard deviation of the re-fitted parameter. This requires error bars (`es` or
-    `Measurement` y values) and assumes they are Gaussian and independent; correlated data
-    points are not accounted for. `optimal_ps` and `minimum` remain those of the original
-    data, and `error_threshold` is not used. Re-fits without a finite quality are dropped
-    (with a warning); if more than 10% are dropped, all errors are `NaN`.
-- `error_threshold::Union{Float64,Vector{Float64}}=1.3`: The error of a parameter is the
-    largest deviation from its optimal value, with the other free parameters re-fitted
-    (`:profile`) or fixed (`:conditional`), at which the quality function reaches
-    `error_threshold` times its minimum. Must be larger than 1.
-- `n_bootstrap::Int=100`: number of synthetic datasets for `error=:bootstrap` (at least 2).
-    The bootstrap errors scatter between random seeds by a relative amount of about
-    `1/sqrt(2(n_bootstrap - 1))` (about 7% for 100), which is enough to quote errors to one
-    significant digit; use about 500 or more for a reliable second digit.
-- `rng::AbstractRNG=Random.default_rng()`: random number generator for `error=:bootstrap`;
-    pass a seeded one (e.g. `Random.Xoshiro(42)`) for reproducible errors.
-- `optimizer::Optim.NelderMead`: Nelder-Mead method configuration, including the
-    initial simplex and adaptive or fixed algorithm parameters. The default initial simplex
-    `Optim.AffineSimplexer(a=0.025, b=0.1)` moves every parameter by `0.1 * p + 0.025`; for
-    parameters on very different scales, use `StepSimplexer` with one step per free
-    parameter.
-- `optimizer_options::Optim.Options`: Optimization runtime and stopping configuration,
-    including tolerances, iteration and function-call limits, callbacks, tracing, and
-    warnings.
+- `sp.optimal_ps::Vector{Float64}`: the optimal values of the free parameters, in the order
+    of `ScalingCollapse.scaled_p_names(sp.sf)` (fixed parameters are not included);
+- `sp.optimal_ps_error::Vector{Float64}`: their errors (see `error` below; zeros with
+    `error=false`);
+- `sp.minimum::Float64`: the value of the quality function at `optimal_ps` (lower is
+    better).
 
-# Fields
-- `data::Vector{Data}`: data to be scaled
-- `sf::ScalingFunction`: scaling function
-- `p_space::Vector{StepRangeLen}`: search parameter space
-- `dx::Vector{Float64}`: optimization interval
-- `optimal_ps::Vector{Float64}`: optimal parameters
-- `optimal_ps_error::Vector{Float64}`: uncertainties of the optimal parameters
-- `minimum::Float64`: minimum of the objective function
-- `solved::Bool`: `true` if optimization was called
-- `verbose::Bool`: print information during optimization
-- `error::Symbol`: error analysis method (`:profile`, `:conditional`, `:bootstrap` or `:none`)
-- `quality_scan::QualityFunction`: quality function for the parameter space scan
-- `quality::QualityFunction`: quality function
-- `skip_scan::Bool`: `true` if `starting_ps` are given by the user
-- `starting_ps::Vector{Float64}`: starting point of the final optimization (with several
-    `starting_ps`, the one that gave the best fit)
-- `errors_defined::Bool`: `true` if errors are given by the user
-- `optimizer::Optim.NelderMead`: Nelder-Mead method configuration
-- `optimizer_options::Optim.Options`: optimization runtime and stopping configuration
-- `n_bootstrap::Int`: number of synthetic datasets for `error=:bootstrap`
-- `rng::AbstractRNG`: random number generator for `error=:bootstrap`
+The input is kept in `sp.data`, one [`ScalingCollapse.Data`](@ref) per system size, and the
+scaling function in `sp.sf`.
+
+Use [`scaled_data`](@ref) to get the rescaled data, e.g. for a plot, and
+[`parameter_errors`](@ref) to compute errors with another method after the fit.
+
+# Data
+`Ls` is a vector of integer system sizes. The x values `xs`, the y values `ys` and the
+optional y errors `es` can each be given as
+- a vector: the same values for every system size (typical for `xs`, e.g. a common
+    temperature grid);
+- a vector of vectors: one vector per system size, so different sizes can have different
+    x values and different numbers of points;
+- a matrix with one column or one row per system size. The orientation is inferred from
+    `length(Ls)`; a square matrix is read column by column (with a warning).
+
+`ys` can also contain `Measurement`s (Measurements.jl), whose uncertainties are then used as
+`es`. If any error is nonzero, the quality functions use their error-weighted form.
+
+The data of every system size are sorted by x. Within a system size the x values must be
+distinct, and all values must be finite. At least two system sizes are needed.
+
+# Keyword arguments
+**Scaling form**
+- `sf::ScalingFunction=ScalingFunction(:xy)`: the scaling function that rescales the data
+    of every system size, see [`ScalingFunction`](@ref). Without `sf`, all keywords that
+    are not listed here are passed on to `ScalingFunction`, so `p_names=["T_c", "nu"],
+    nu=1.0` is short for `sf=ScalingFunction(:x; p_names=["T_c", "nu"], nu=1.0)` (two
+    names select the preset `:x`, three names the preset `:xy`).
+- `dx::Vector{Float64}=[-Inf, Inf]`: the window `[x_min, x_max]` of *rescaled* x values in
+    which the collapse is measured. The quality function only compares the curves inside
+    this window, intersected with the x range that all sizes cover. Choose it around the
+    critical point, where the scaling form holds.
+
+**Search**
+- `p_space::Vector{<:AbstractRange}=[0.1:0.1:3.0, ...]`: one range per free parameter.
+    The quality function is evaluated on every point of this grid, a Nelder–Mead fit
+    starts from every grid point that is lower than its neighbours, and the best result
+    starts the final fit. All fits are bounded by `p_space`, so the optimum must lie
+    inside it. The scan costs `prod(length, p_space)` evaluations.
+- `starting_ps`: skip the scan and start the final fit at this point (one value per free
+    parameter), or at each of several points (a vector of such vectors, e.g.
+    `[[2.25, 1.0], [2.3, 0.8]]`; the fit with the lowest finite quality is kept). The
+    fits are then not bounded by `p_space`. This is faster than a scan, but only finds
+    the minimum close to the start.
+- `quality::QualityFunction=MultipleSplines()`: the quality function of the final fit and
+    of the error analysis. See [`MultipleSplines`](@ref), [`Linear`](@ref),
+    [`SingleSpline`](@ref) and [`Houdayer`](@ref).
+- `quality_scan::QualityFunction=MultipleSplines(scan_mode=true)`: the quality function of
+    the scan. The default ignores error bars, which makes the scan more robust; there is
+    rarely a reason to change it.
+- `optimizer::Optim.NelderMead`: the Nelder–Mead configuration of every fit, including the
+    initial simplex and the algorithm parameters. The default initial simplex,
+    `Optim.AffineSimplexer(a=0.025, b=0.1)`, moves every parameter `p` by `0.1p + 0.025`.
+    For parameters on very different scales, use [`StepSimplexer`](@ref).
+- `optimizer_options::Optim.Options=Optim.Options()`: tolerances, iteration and time
+    limits, tracing and callbacks of every fit, including the fits of the error analysis.
+- `verbose::Bool=false`: log the progress of the fit.
+
+**Error analysis**
+- `error::Union{Bool,Symbol}=true`: the method of the error analysis.
+    - `true` or `:profile` (default): profile width. The parameter is displaced from its
+        optimum, the other free parameters are re-fitted at every displacement, and the
+        error is the larger of the two displacements (one on each side) at which the
+        quality first reaches `error_threshold` times its minimum.
+    - `:conditional`: as `:profile`, but the other parameters stay at their optimum. This
+        ignores correlations between the parameters and gives smaller or equal errors. With
+        one free parameter both methods agree.
+    - `:bootstrap`: standard deviation of the parameters fitted to `n_bootstrap` synthetic
+        data sets, in which every y value is redrawn from a Gaussian with its error bar as
+        width. Needs error bars.
+    - `false`: no error analysis.
+- `error_threshold::Union{Real,Vector{<:Real}}=1.3`: the factor by which the quality may
+    exceed its minimum within the error of a parameter (`:profile` and `:conditional`); one
+    number, or one per free parameter. Must be larger than 1.
+- `n_bootstrap::Integer=100`: the number of synthetic data sets of `error=:bootstrap` (at
+    least 2).
+- `rng::AbstractRNG=Random.default_rng()`: the random number generator of
+    `error=:bootstrap`. Pass a seeded one, e.g. `Random.Xoshiro(42)`, for reproducible
+    errors.
+
+# Error analysis in detail
+The profile and conditional errors are widths defined by a threshold on the quality, not
+standard deviations with a known coverage: the threshold is not calibrated, and correlations
+between data points (e.g. curves computed from the same Monte Carlo samples) are not taken
+into account. The profile accounts for correlations between the parameters.
+
+*Profile.* The re-fitted parameters stay inside `p_space`; the profiled parameter does not.
+The crossing closest to the fit is used, so the error is a local width. Every inner fit
+uses `optimizer` and `optimizer_options`. With an affine initial simplex (the default), it
+is followed by a second fit whose initial steps are the conditional errors of the re-fitted
+parameters, which resolves quality valleys much narrower than the affine steps; any other
+initial simplex is used alone. If the profile finds a lower quality than `minimum` inside
+`p_space`, the fit is re-optimized from there and the analysis restarts (with a warning, up
+to 3 times), so `optimal_ps` and `minimum` can change. When the restarts run out, all errors
+are `NaN`. A lower quality outside `p_space` sets the error of that parameter to `NaN` and
+warns that `p_space` may be too narrow.
+
+*Profile and conditional.* An error is `NaN` (with a warning) if the quality never reaches
+the threshold, or becomes undefined (no overlap of the rescaled data within `dx`) before.
+
+*Bootstrap.* Every synthetic data set is fitted with Nelder–Mead from `optimal_ps`, inside
+`p_space`. `optimal_ps` and `minimum` stay those of the original data. The method assumes
+Gaussian, independent errors. Fits without a finite quality are dropped (with a warning);
+if more than 10% are dropped, all errors are `NaN`. The bootstrap costs about `n_bootstrap`
+fits, and its errors scatter between random seeds by a relative amount of about
+`1/sqrt(2(n_bootstrap - 1))`: about 7% for 100 samples, enough for one significant digit.
+Use 500 or more for a reliable second digit.
 
 # Examples
 ```julia
-using ScalingCollapse
-```
-
-### rescale the x axis only
-```julia
-# (e.g. for ys == binder cumulant of Ising model)
-ScalingProblem(xs, ys, Ls;
+# Binder cumulant: rescale x only, U(T, L) = F((T - T_c) L^(1/ν))
+sp = ScalingProblem(Ts, binder, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
-    p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
+    p_space=[2.0:0.02:2.5, 0.5:0.1:1.5],
     dx=[-2.0, 2.0],
 )
+sp.optimal_ps, sp.optimal_ps_error
 
-# or the same but with errors
-ScalingProblem(xs, ys, es, Ls;
-    sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
-    p_space=[0.1:0.1:3.0, 0.1:0.1:3.0],
-    dx=[-2.0, 2.0],
-)
-```
+# magnetization with error bars: M(T, L) = L^(-β/ν) F((T - T_c) L^(1/ν))
+ScalingProblem(Ts, mag, mag_err, Ls; sf=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]))
 
-### rescale the x and y axis
-```julia
-# (e.g. for ys == magnetization of Ising model)
-ScalingProblem(xs, ys, Ls;
-    sf=ScalingFunction(:xy; p_names=["T_c", "nu", "beta"]),
-    dx=[-2.0, 2.0],
-)
-```
+# susceptibility, with ν fixed: χ(T, L) = L^(γ/ν) F((T - T_c) L^(1/ν))
+ScalingProblem(Ts, chi, Ls; sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"], nu=1))
 
-### rescale the x and y axis, but y axis with negative exponent
-```julia
-# (e.g. for ys == susceptibility of Ising model)
-ScalingProblem(xs, ys, Ls;
-    sf=ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]),
-    dx=[-2.0, 2.0],
-)
-```
-
-### configure the Nelder-Mead optimizer
-```julia
-optimizer = ScalingCollapse.Optim.NelderMead(
-    initial_simplex=ScalingCollapse.Optim.AffineSimplexer(a=0.01, b=0.1),
-)
-optimizer_options = ScalingCollapse.Optim.Options(
-    iterations=5_000,
-    x_abstol=1e-10,
-    f_reltol=1e-12,
-    time_limit=60.0,
-)
-
-ScalingProblem(xs, ys, Ls;
+# no scan: start at a guess, with bootstrap errors
+ScalingProblem(Ts, binder, binder_err, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
     starting_ps=[2.27, 1.0],
-    optimizer=optimizer,
-    optimizer_options=optimizer_options,
+    error=:bootstrap, n_bootstrap=500, rng=Random.Xoshiro(1),
 )
 
-# one initial step per free parameter (here T_c and nu), e.g. of the order of their errors
-optimizer = ScalingCollapse.Optim.NelderMead(initial_simplex=StepSimplexer([0.002, 0.05]))
-ScalingProblem(xs, ys, Ls;
+# configure Nelder–Mead
+using ScalingCollapse: Optim
+ScalingProblem(Ts, binder, Ls;
     sf=ScalingFunction(:x; p_names=["T_c", "nu"]),
-    p_space=[2.2:0.01:2.35, 0.5:0.1:1.5],
-    optimizer=optimizer,
+    optimizer=Optim.NelderMead(initial_simplex=StepSimplexer([0.002, 0.05])),
+    optimizer_options=Optim.Options(iterations=5_000, time_limit=60.0),
 )
 ```
-
 """
 mutable struct ScalingProblem
 
@@ -547,26 +535,30 @@ end
 """
     parameter_errors(sp::ScalingProblem; method, error_threshold, n_bootstrap, rng)
 
-Compute the errors of the optimal parameters of the solved problem `sp` without changing
-`sp`, e.g. with another method than the one `sp` was constructed with, or after a fit with
-`error=false`. Returns one error per free parameter (in the order of `scaled_p_names(sp.sf)`).
+Compute the errors of the optimal parameters of the solved problem `sp`, without changing
+`sp`. Use it to compare error methods, or to add errors to a fit made with `error=false`.
+Returns one error per free parameter, in the order of `ScalingCollapse.scaled_p_names(sp.sf)`.
 
-The keywords are those of the `ScalingProblem` constructor and default to the values stored
-in `sp`; `method` takes the values of its `error` keyword except `false` (default: `sp.error`,
-or `:profile` if `sp` was fitted with `error=false`). The analysis uses the optimizer settings
-of `sp`. The bootstrap (`method=:bootstrap`) draws from `rng`, which advances it (`sp.rng` by
-default); pass a seeded one, e.g. `rng=Random.Xoshiro(1)`, for reproducible errors. With the
-same `rng` state, the errors equal those of a problem constructed with the same keywords.
+The keywords are those of the [`ScalingProblem`](@ref) constructor and default to the
+settings stored in `sp`. `method` takes the values of the `error` keyword except `false`;
+it defaults to `sp.error`, or to `:profile` if `sp` was fitted with `error=false`. The fits
+of the analysis use the optimizer settings of `sp`.
 
-The profile (`method=:profile`) can find a quality lower than `sp.minimum`, which means that
-`sp` is not at a minimum. `parameter_errors` then throws an `ErrorException`; use
-[`parameter_errors!`](@ref) to re-optimize the fit and compute the errors there.
+The bootstrap (`method=:bootstrap`) advances `rng` (`sp.rng` by default). Pass a seeded one,
+e.g. `rng=Random.Xoshiro(1)`, for reproducible errors; for the same `rng` state, the errors
+equal those of a problem constructed with the same keywords.
+
+If the profile (`method=:profile`) finds a lower quality than `sp.minimum`, `sp` is not at a
+minimum, and `parameter_errors` throws an `ErrorException`. [`parameter_errors!`](@ref)
+re-optimizes the fit in that case.
 
 # Examples
 ```julia
+using Random
 sp = ScalingProblem(xs, ys, es, Ls; error=false)
 σ_profile = parameter_errors(sp)
-σ_bootstrap = parameter_errors(sp; method=:bootstrap, n_bootstrap=500, rng=Random.Xoshiro(1))
+σ_conditional = parameter_errors(sp; method=:conditional)
+σ_bootstrap = parameter_errors(sp; method=:bootstrap, n_bootstrap=500, rng=Xoshiro(1))
 ```
 """
 function parameter_errors(sp::ScalingProblem; kwargs...)
@@ -579,10 +571,12 @@ end
     parameter_errors!(sp::ScalingProblem; method, error_threshold, n_bootstrap, rng)
 
 Like [`parameter_errors`](@ref), but store the errors in `sp.optimal_ps_error` and the
-keywords in `sp` (`method` in `sp.error`), as if `sp` had been constructed with them. If the
-profile finds a quality lower than the minimum, the fit is re-optimized from there with a
-warning, so `sp.optimal_ps` and `sp.minimum` can change, as in the constructor. Returns a
-copy of the errors.
+keywords in `sp` (`method` in `sp.error`), as if `sp` had been constructed with them.
+Returns a copy of the errors.
+
+If the profile finds a lower quality than `sp.minimum`, the fit is re-optimized from there
+(with a warning) and the analysis restarts, as in the constructor, so `sp.optimal_ps` and
+`sp.minimum` can change.
 """
 function parameter_errors!(sp::ScalingProblem; kwargs...)
     work = _error_problem(sp; kwargs...)
@@ -673,20 +667,37 @@ function Base.show(io::IO, sp::ScalingProblem)
 end
 
 """
-    scaled_data(sp::ScalingProblem)
-    scaled_data(sp::ScalingProblem, ps)
+    scaled_data(sp::ScalingProblem[, ps]; splines=false) -> (xs, ys, es, Ls)
 
-Return the scaled data of the `ScalingProblem` `sp`.
+Rescale the data of `sp` with the scaling function `sp.sf` and the free parameters `ps`
+(default: `sp.optimal_ps`). Returns one vector per system size, in the order of the sizes
+given to `ScalingProblem`:
 
-# Arguments
-- `sp::ScalingProblem`: scaling problem
-- `ps::Vector{Float64}=sp.optimal_ps`: parameters to scale the data with (manually)
+- `xs::Vector{Vector{Float64}}`: rescaled x values (sorted);
+- `ys::Vector{Vector{Float64}}`: rescaled y values;
+- `es::Vector{Vector{Float64}}`: rescaled y errors (zeros without error bars);
+- `Ls::Vector{Int}`: the system sizes.
 
-# Returns
-- `xs::Vector{Vector{Float64}}`: scaled x values
-- `ys::Vector{Vector{Float64}}`: scaled y values
-- `es::Vector{Vector{Float64}}`: scaled y error values
-- `Ls::Vector{Float64}`: scaled system sizes
+The result contains all data points, also those outside the window `sp.dx`.
+
+With `splines=true` (only for the [`MultipleSplines`](@ref) quality function), three more
+vectors are returned: `xvals`, `yvals` and `evals` hold, for every system size, the
+`sp.quality.N_steps` evaluation points in the window that the quality function compares,
+the interpolated y values there (as used by the quality function, before normalization),
+and the linearly interpolated errors.
+
+# Examples
+```julia
+using CairoMakie
+xs, ys, es, Ls = scaled_data(sp)
+fig = Figure()
+ax = Axis(fig[1, 1])
+for (x, y, L) in zip(xs, ys, Ls)
+    scatterlines!(ax, x, y; label="L = \$L")
+end
+axislegend(ax)
+fig
+```
 """
 function scaled_data(sp::ScalingProblem; kwargs...)
     return scaled_data(sp, sp.optimal_ps; kwargs...)

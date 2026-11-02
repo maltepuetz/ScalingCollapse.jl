@@ -4,53 +4,136 @@ CurrentModule = ScalingCollapse
 
 # Getting Started
 
-To find the best parameters for a finite size scaling analysis, we need to create a `ScalingProblem`. Lets say we have data for the binder cumulant of the 2D Ising model `binder` for different temperatures `Ts` and different system sizes `Ls`. We want to find the critical temperature and the critical exponent of the correlation length. Let's create a `ScalingProblem` as follows:
-```julia
+This tutorial performs a complete finite-size scaling analysis of synthetic data whose
+critical parameters we know, so that we can check the result. The
+[examples](@ref "2D Ising model") apply the same steps to real data.
+
+## The data
+
+Suppose we measured an order parameter ``Y`` at the control parameter ``x`` (e.g. a
+temperature) for four system sizes ``L``, each point with an error bar. We generate such
+data from the scaling form
+
+```math
+Y(x, L) = L^{-\beta/\nu} \, \mathcal{F}\big((x - x_c)\, L^{1/\nu}\big)
+```
+
+with ``x_c = 0.5``, ``\nu = 1.2`` and ``\beta = 0.3``, and add 1% Gaussian noise:
+
+```@example tutorial
 using ScalingCollapse
-sp = ScalingProblem(Ts, binder, Ls;
-    sf = ScalingFunction(:x),
-    dx = [-2.0, 2.0],
+using Random
+
+x_c, ν, β = 0.5, 1.2, 0.3
+F(z) = 1 / (1 + exp(2z)) + 0.2       # the master curve
+
+rng = Xoshiro(42)
+Ls = [16, 32, 64, 128]
+xs = collect(range(0.3, 0.7; length=41))
+ys = Vector{Float64}[]
+es = Vector{Float64}[]
+for L in Ls
+    y = L^(-β / ν) .* F.((xs .- x_c) .* L^(1 / ν))
+    e = 0.01 .* y                    # error bars
+    push!(ys, y .+ e .* randn(rng, length(y)))
+    push!(es, e)
+end
+nothing # hide
+```
+
+All sizes share the x values `xs`, so a single vector is enough; `ys` and `es` hold one
+vector per system size. [Input data](@ref) lists all accepted formats, including matrices
+and `Measurement`s.
+
+## Solving the scaling problem
+
+A [`ScalingProblem`](@ref) needs the data, a [`ScalingFunction`](@ref) that describes the
+scaling form, and a range for each parameter to search:
+
+```@example tutorial
+sp = ScalingProblem(xs, ys, es, Ls;
+    sf=ScalingFunction(:xy; p_names=["x_c", "nu", "beta"]),
+    p_space=[0.4:0.01:0.6, 0.5:0.1:2.0, 0.0:0.05:0.6],
+    dx=[-3.0, 3.0],
 )
 ```
-The kwarg `sf` is used to set the scaling function. In this case we use the scaling function preset `:x` which only rescales the x-axis as `x -> (x - p1) * L^(1/p2)`. We can also give the parameters custom names by passing the kwarg `p_names::Vector{String}` to the `ScalingFunction` constructor.
-We use the kwarg `dx` to limit the optimization to a fixed interval because powerlaw dependece is usually only accurate close to the critical point. The default value is `dx = [-Inf, Inf]`.
-Other kwargs are:
-- `p_space = [0.1:0.1:3.0 for _ in 1:n_parameters(sf)]` This sets the parameter space that will be scanned for local minima of the cost function. The optimization algorithm will start from the determined local minima to find the global minimum. Note that the the optimal parameters should lie within the given parameter space. Also note, that the initial scan can take a while for too small stepsizes. If you have a good idea where the optimal parameters should lie, you can set the parameter space accordingly. You can also skip the local minima search completely, by setting the kwarg `starting_ps`.
-- `starting_ps::Vector{Float64}` This kwarg can be used to skip the local minima search. If `starting_ps` is set to a specific parameter set, the optimization algorithm will start from this point. This can be useful if you already have a good guess for the optimal parameters. Note that you might not find the optimal parameters if you start from a bad guess.
-- `error=true` This kwarg selects the error analysis: `true` or `:profile` (default), `:conditional`, `:bootstrap`, or `false` (no error analysis). With `:profile`, the error of each parameter is a local profile width: we displace the parameter from its optimum, re-fit all other free parameters at every displacement, and find where the quality reaches `error_threshold` times its minimum (default `error_threshold = 1.3`) when moving outward from the fit. The error is the maximum of the displacements in plus and minus direction. With `:conditional`, the other parameters are instead held fixed at their optimal values, which ignores correlations and gives smaller or equal errors (equal with one free parameter or uncorrelated parameters). If the profile finds a lower quality than the reported minimum, the fit is re-optimized and the analysis restarted (with a warning), so `optimal_ps` and `minimum` can change during the error analysis. If the restarts run out, all errors are `NaN` with a warning; a lower quality found with the parameter outside `p_space` gives `NaN` for that parameter and a warning to widen `p_space`. Note that these errors are widths defined by a quality threshold, not standard deviations with a known coverage: profiling accounts for correlations between parameters, but the threshold is not calibrated and correlated data points (e.g. curves built from the same Monte Carlo samples) are not accounted for.
-  With `:bootstrap`, the errors are standard deviations that come from the error bars of the data: we draw `n_bootstrap` (default 100) synthetic datasets, in which every y value is replaced by a Gaussian random number centred on it with its error bar as width, re-fit each one starting from the optimal parameters, and report the standard deviation of the re-fitted parameters. This requires error bars and assumes they are Gaussian and independent (correlated data points are again not accounted for). Pass a seeded random number generator, e.g. `rng = Random.Xoshiro(42)`, for reproducible errors. The bootstrap costs about `n_bootstrap` times one fit. The bootstrap errors scatter between random seeds by a relative amount of about `1/sqrt(2(n_bootstrap - 1))`, i.e. about 7% for the default of 100, which is enough to quote errors to one significant digit; use about 500 or more for a reliable second digit.
-- `verbose::Bool=false` This kwarg can be used to turn the verbose output on or off. If `verbose=true`, the algorithm will print some information about the optimization process.
 
-There are also other preset ScalingFunctions:
-- `:x` Rescales the x-axis as `x -> (x - p1) * L^(1/p2)`.
-- `:xy` This is the default scaling function. It rescales the x-axis as `x -> (x - p1) * L^(1/p2)` and the y-axis as `y -> y * L^(p3/p2)`.
-- `:xny` This scaling function is similar to `:xy` but it rescales the y-axis as `y -> y * L^(-p3/p2)`. In this case the critical exponent `p3` has a negative sign.
+The constructor did all the work:
 
-Pass `relative = true` to rescale the x-axis relative to `p1` instead, as `x -> (x - p1)/p1 * L^(1/p2)` (e.g. with the reduced temperature `(T - T_c)/T_c`): `ScalingFunction(:x; p_names = ["T_c", "nu"], relative = true)`. This was the default up to version 0.2. A window `dx` of the relative form corresponds to `dx .* p1` in the default form, so to reproduce an old fit either pass `relative = true` or multiply `dx` by the critical point. The default form also works for `p1 = 0` or `p1 < 0`.
+1. The preset `:xy` rescales the data as ``x \to (x - x_c) L^{1/\nu}`` and
+   ``y \to y\, L^{\beta/\nu}``; `p_names` gives the three parameters their names.
+2. It evaluated the quality of the collapse on every point of the grid `p_space` and
+   refined the best candidates with the Nelder–Mead method.
+3. It estimated the error of every parameter (by default from the profile of the quality
+   function, see [Error analysis](@ref)).
 
-Note that you can also create your own scaling function! We can make our scaling function looking a little bit cooler by giving our parameters custom names with the kwarg `p_names::Vector{String}`. 
+`dx` restricts the comparison of the curves to rescaled x values between -3 and 3, i.e. to
+the critical region, where the scaling form holds best. All three parameters agree with the
+values we put in. The results are fields of `sp`:
 
-Now that we know the basics, let us solve another scaling problem. This time we know that the critical temperature is somewhere between `T_c = 2.0` and `T_c = 2.4` and the critical exponent is somewhere between `nu = 0.5` and `nu = 1.5`. We set the parameter space accordingly:
-```julia
-using ScalingCollapse
-sp = ScalingProblem(Ts, binder, Ls;
-    sf = ScalingFunction(:x; p_names = ["T_c", "nu"]),
-    dx = [-2.0, 2.0],
-    p_space = [2.0:0.1:2.4, 0.5:0.1:1.5],
-    quality = MultipleSplines(),
-    error = true,
+```@example tutorial
+sp.optimal_ps
+```
+
+```@example tutorial
+sp.optimal_ps_error
+```
+
+```@example tutorial
+sp.minimum # the quality of the collapse at the optimum (lower is better)
+```
+
+## Plotting the collapse
+
+[`scaled_data`](@ref) returns the rescaled data, one vector per system size. Plotted next
+to the raw data, the collapse looks like this (the dashed lines mark the window `dx`):
+
+```@example tutorial
+using CairoMakie
+
+xs_scaled, ys_scaled, es_scaled, _ = scaled_data(sp)
+
+colors = cgrad(:Blues)[range(0.35, 1.0; length=length(Ls))]
+fig = Figure(size=(760, 320))
+ax1 = Axis(fig[1, 1]; xlabel=L"x", ylabel=L"Y", title="data")
+ax2 = Axis(fig[1, 2]; xlabel=L"(x - x_c)\,L^{1/\nu}", ylabel=L"Y\,L^{\beta/\nu}",
+    title="collapse")
+for i in eachindex(Ls)
+    errorbars!(ax1, xs, ys[i], es[i]; color=colors[i])
+    scatter!(ax1, xs, ys[i]; color=colors[i], markersize=6, label="L = $(Ls[i])")
+    errorbars!(ax2, xs_scaled[i], ys_scaled[i], es_scaled[i]; color=colors[i])
+    scatter!(ax2, xs_scaled[i], ys_scaled[i]; color=colors[i], markersize=6)
+end
+vlines!(ax2, sp.dx; color=:gray, linestyle=:dash)
+xlims!(ax2, -8, 8)
+Legend(fig[1, 3], ax1)
+fig
+```
+
+!!! tip "Figure style"
+    The figures in this documentation use LaTeX fonts and no grid lines. To get the same
+    style, run `set_theme!(theme_latexfonts(); Axis=(xgridvisible=false, ygridvisible=false))`
+    once before plotting.
+
+## Fixing a parameter
+
+If a parameter is known, e.g. from theory, fix it by passing its name and value to the
+`ScalingFunction`. It is then no longer fitted, and `p_space`, `optimal_ps` and
+`optimal_ps_error` only refer to the remaining free parameters:
+
+```@example tutorial
+sp_fixed = ScalingProblem(xs, ys, es, Ls;
+    sf=ScalingFunction(:xy; p_names=["x_c", "nu", "beta"], nu=1.2),
+    p_space=[0.4:0.01:0.6, 0.0:0.05:0.6],
+    dx=[-3.0, 3.0],
 )
 ```
-We limited the parameter space so the algorithm runs faster, calculated some error bars and made everything look cooler by giving the parameters custom names! 
-## Fixing parameters
-Let's say that we know from our statistical mechanics course that the critical exponent of the correlation length is `nu = 1`. We can fix this parameter by passing it as a kwarg to the `ScalingFunction` constructor.
-```julia
-using ScalingCollapse
-sp = ScalingProblem(Ts, binder, Ls;
-    sf = ScalingFunction(:x; p_names = ["T_c", "nu"], nu=1),
-    dx = [-2.0, 2.0],
-    p_space = [2.0:0.1:2.4],
-    error = true,
-)
-```
-Now the algorithm will only optimize the critical temperature `T_c` and the critical exponent of the correlation length will be fixed to `nu = 1`.
+
+## Next steps
+
+- [Finite-size scaling](@ref) explains which preset fits which observable.
+- [Fitting](@ref) covers the search (`p_space`, `starting_ps`, `dx`) and what to do when a
+  fit fails.
+- [Error analysis](@ref) compares the error methods and shows how to inspect the quality
+  landscape.
+- The examples start with the [2D Ising model](@ref "2D Ising model").

@@ -2,6 +2,8 @@ using ScalingCollapse
 using Documenter
 using DocumenterVitepress
 
+include("figure_theme.jl")
+
 DocMeta.setdocmeta!(ScalingCollapse, :DocTestSetup, :(using ScalingCollapse); recursive=true)
 
 makedocs(;
@@ -17,8 +19,21 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Getting Started" => "getting-started.md",
         "Manual" => [
-            "Getting Started" => "getting-started.md",
+            "Finite-size scaling" => "manual/background.md",
+            "Input data" => "manual/data.md",
+            "Scaling functions" => "manual/scaling-functions.md",
+            "Fitting" => "manual/fitting.md",
+            "Error analysis" => "manual/errors.md",
+            "Quality functions" => "manual/quality-functions.md",
+        ],
+        "Examples" => [
+            "2D Ising model" => "examples/ising.md",
+            "Site percolation with error bars" => "examples/percolation.md",
+            "Specific heat: a custom scaling function" => "examples/specific-heat.md",
+            "Mean-field model: exact data" => "examples/curie-weiss.md",
+            "Uniform grids and quality landscapes" => "examples/landscapes.md",
         ],
         "API Reference" => "api.md",
     ],

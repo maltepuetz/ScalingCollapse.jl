@@ -1,106 +1,65 @@
 """
-    ScalingFunction(preset::Symbol; kwargs...)
-    ScalingFunction(f::Function; kwargs...)
+    ScalingFunction(preset::Symbol=:xy; p_names, relative=false, <name>=value, ...)
+    ScalingFunction(f::Function; p_names, <name>=value, ..., x_scale, y_scale)
+    ScalingFunction(p_names::Vector{String}; kwargs...)
 
-A `ScalingFunction` is used in a `ScalingProblem` to rescale the data. It is
-defined by a function `f` and a set of parameters `p_names`. The function `f` is
-called with the data `d` and the parameters `p1`, `p2`, ... and returns a new
-`Data` object.
-
-# Arguments
-- `preset::Symbol`: a preset for the `ScalingFunction`. See `Presets` below.
-- `f::Function`: the function `f` to be used in the `ScalingFunction`. Pass this
-    argument to create a custom `ScalingFunction`. f should take a `Data` object
-    and a set of parameters `p1`, `p2`, ... and return a new `Data` object:
-    f(d::Data, p1, p2, ...) -> Data.
-
-    Note that you might want to set the function `f` as a keyword argument to
-    use the "fixing parameters" feature (see below).
+The scaling form of a [`ScalingProblem`](@ref): how the data of one system size are
+rescaled for given values of the scaling parameters.
 
 # Presets
-The `preset` argument can be used to create a `ScalingFunction` with a preset
-function `f` and a preset set of parameter names `p_names`. The following
-presets are available:
-- `:x` rescale the x values of the data according to x -> (x - p1) * L^(1/p2)
-- `:xy` rescale the x and y values of the data according to x -> (x - p1) * L^(1/p2)
-    and y -> y * L^(p3/p2)
-- `:xny` rescale the x and y values of the data according to x -> (x - p1) * L^(1/p2)
-    and y -> y * L^(-p3/p2)
+The presets rescale x around a critical point `p1` with the correlation length exponent
+`p2`, and optionally y with a power of `L`:
 
-With `relative=true`, all presets rescale x relative to p1 instead, i.e.
-x -> (x - p1)/p1 * L^(1/p2), the reduced form used up to version 0.2. A window `dx` of the
-relative form corresponds to `dx .* p1` in the default form.
+| preset | x is rescaled to      | y is rescaled to | typical observable                     |
+|:-------|:----------------------|:-----------------|:---------------------------------------|
+| `:x`   | `(x - p1) * L^(1/p2)` | `y`              | dimensionless: Binder cumulant, `ξ/L`  |
+| `:xy`  | `(x - p1) * L^(1/p2)` | `y * L^(p3/p2)`  | `y ∼ L^(-p3/p2)`: order parameter (β)  |
+| `:xny` | `(x - p1) * L^(1/p2)` | `y * L^(-p3/p2)` | `y ∼ L^(p3/p2)`: susceptibility (γ)    |
+
+Errors are rescaled like y. `:xy` is the default. Two `p_names` without a preset select
+`:x`, three select `:xy`.
+
+# Custom scaling functions
+Any other scaling form is a function `f(d::ScalingCollapse.Data, p1, p2, ...)` that receives
+the data `d` of one system size and the values of *all* parameters (also the fixed ones) and
+returns the rescaled data as a new `ScalingCollapse.Data` (see [`ScalingCollapse.Data`](@ref)).
+It must not modify `d`. Give the parameter names with `p_names` (or only their number with
+`N_parameters`), and describe the scaling with `x_scale` and `y_scale` for display. To
+make your own scaling form available as a preset symbol, add a method to
+[`ScalingCollapse.handle_preset`](@ref).
 
 # Keyword arguments
-- `p_names::Vector{String}`: the parameter names `p_names` to be used in the
-    `ScalingFunction`. This kwarg can be used to overwrite the preset parameter
-    names `p_names` (p1, p2, ...).
-- `f::Function`: the function `f` to be used in the `ScalingFunction`. This kwarg can
-    be used to overwrite the preset function `f`. If you pass f as a kwarg, instead of
-    an argument, you can use the "fixing parameters" feature (see below). In that case
-    the number of paramters of your function f should match the preset, i.e. if your
-    function f takes 2 parameters, you should use the preset `:x` and if your function
-    f takes 3 parameters, you should use the preset `:xy`.
-- `relative::Bool=false`: rescale x absolute, x -> (x - p1) * L^(1/p2) (`false`), or
-    relative to p1, x -> (x - p1)/p1 * L^(1/p2) (`true`). Only for the presets `:x`, `:xy`
-    and `:xny`, and not together with a custom `f`.
-- `x_scale::String`: the scaling function for the x values. This is just used to
-    display the scaling function in plots and julias show function.
-- `y_scale::String`: the scaling function for the y values. This is just used to
-    display the scaling function in plots and julias show function.
-- `p::Float64`: fix a parameter to a value. If you know the analytical value of a scaling
-    parameter you might want to fix it to this value. This can speed up the optimization
-    and give better results. Note, that `p` is either "p1", "p2", ... or the name you
-    specified in `p_names`.
-
-    Note that this feature is only available if you use one of the presets. You can still
-    modify the scaling function by setting `f` as a kwarg.
+- `p_names::Vector{String}`: the names of the parameters (default: `"p1"`, `"p2"`, ...).
+    They name the parameters in the output and select parameters to fix.
+- `<name>=value`: fix the parameter `<name>` (one of `p_names`) to `value`. A fixed
+    parameter is not fitted, has no entry in `p_space`, `starting_ps`, `optimal_ps` or
+    `optimal_ps_error`, and is passed to the scaling function with its fixed value.
+- `relative::Bool=false`: with `true`, the presets rescale x relative to the critical
+    point, `(x - p1)/p1 * L^(1/p2)` (e.g. with the reduced temperature `(T - T_c)/T_c`);
+    this was the default up to version 0.2. A window `dx` of the relative form equals
+    `dx .* p1` in the absolute form, which also works for `p1 ≤ 0`. Only for presets.
+- `x_scale::String`, `y_scale::String`: the rescaling of x and y as text, used to display
+    the problem. The presets set them.
+- `N_parameters::Int`: the number of parameters of a custom `f`, if `p_names` is not given.
+- `f::Function`: replace the function of a preset, keeping its parameter names and
+    `x_scale`/`y_scale` (the function must take as many parameters as the preset).
 
 # Examples
-### Presets
 ```julia
-# rescale the x axis only
-ScalingFunction(:x; p_names=["T_c", "nu"])
-
-# lets fix nu to 1.0
-ScalingFunction(:x; p_names=["T_c", "nu"], nu=1.0)
-
-# rescale x relative to T_c, as (T - T_c)/T_c * L^(1/nu)
+ScalingFunction(:x; p_names=["T_c", "nu"])            # Binder cumulant
+ScalingFunction(:x; p_names=["T_c", "nu"], nu=1.0)    # ν fixed to 1
+ScalingFunction(:xy; p_names=["T_c", "nu", "beta"])   # magnetization
+ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"]) # susceptibility
 ScalingFunction(:x; p_names=["T_c", "nu"], relative=true)
 
-# rescale the x and y axis
-ScalingFunction(:xy; p_names=["T_c", "nu", "beta"])
-
-# rescale the x and y axis with negative exponent on y
-ScalingFunction(:xny; p_names=["T_c", "nu", "gamma"])
-```
-
-### Custom scaling function
-```julia
-# define the function that scales the data
-function myfunction(d::ScalingCollapse.Data, p1, p2)
-
-    #  initialize arrays for scaled data
-    xs = zeros(length(d.xs))
-    ys = zeros(length(d.ys))
-    es = zeros(length(d.es))
-
-    # scale data according to p1 and p2
-    for (i, x, y, e) in zip(eachindex(d.xs), d.xs, d.ys, d.es)
-        xs[i] = (x - p1) / p1 * log(d.L)
-        ys[i] = y * d.L^(p2)
-        es[i] = e * d.L^(p2)
-    end
-
-    # create new Data object with scaled data
-    return ScalingCollapse.Data(d.L, xs, ys, es)
+# custom: logarithmic shift of y, as for the specific heat of the 2D Ising model
+function log_shift(d::ScalingCollapse.Data, T_c, nu, a)
+    xs = @. (d.xs - T_c) * d.L^(1 / nu)
+    ys = @. d.ys - a * log(d.L)
+    return ScalingCollapse.Data(d.L, xs, ys, d.es)
 end
-
-ScalingFunction(myfunction; p_names=["myp1", "myp2"])
-
-# lets say we want to fix the parameter "myp1" to 1.0
-# we use the preset :x (because it also has 2 parameters) and overwrite the function f
-ScalingFunction(:x; f=myfunction, p_names=["myp1", "myp2"], myp1=1.0)
+ScalingFunction(log_shift; p_names=["T_c", "nu", "a"], nu=1.0,
+    x_scale="(T - T_c) * L^(1/nu)", y_scale="C - a * log(L)")
 ```
 """
 struct ScalingFunction
@@ -164,53 +123,37 @@ function specialize_wrapper(f::Function, fixed_idxs::NTuple{N1,Int}, free_idxs::
 end
 
 """
-    handle_preset(::Val{preset}; kwargs...)
-Helper function to handle presets for ScalingFunction's. You can add your own by
-adding a new method for `handle_preset`. The method should return the function `f`, the
-parameter names `p_names`, the x scaling function `x_scale` and the y scaling function
-`y_scale` as a tuple. The function f should take a `ScalingCollapse.Data` object and the
-parameters of your scaling function and return a new `ScalingCollapse.Data` object which
-contains the scaled data. Like so:
+    ScalingCollapse.handle_preset(::Val{preset}; kwargs...) -> (f, p_names, x_scale, y_scale)
+
+Return the definition of the [`ScalingFunction`](@ref) preset `preset`. Add a method to
+define a new preset, which `ScalingFunction(preset; kwargs...)` then accepts like the
+built-in ones, including `p_names` and fixed parameters.
+
+The method receives the keywords given to `ScalingFunction` and returns a tuple of
+- `f`: the scaling function `f(d::ScalingCollapse.Data, p1, p2, ...) -> ScalingCollapse.Data`;
+- `p_names::Vector{String}`: the default parameter names, usually overridden by
+    `kwargs[:p_names]`;
+- `x_scale::String`, `y_scale::String`: the rescaling of x and y as text, for display.
+
+# Examples
 ```julia
 using ScalingCollapse
-function _my_custom_scaling(d::ScalingCollapse.Data, p1, p2)
 
-    xs = zeros(length(d.xs))
-    ys = zeros(length(d.ys))
-    es = zeros(length(d.es))
-
-    for (i, x) in enumerate(d.xs)
-        xs[i] = (x - p1) * d.L^(1 / p2)
-    end
-    for (i, y) in enumerate(d.ys)
-        ys[i] = y
-    end
-    for (i, e) in enumerate(d.es)
-        es[i] = e
-    end
-
-    return ScalingCollapse.Data(d.L, xs, ys, es)
+# x rescaled with L^(1/nu), y shifted by a log(L)
+function log_shift(d::ScalingCollapse.Data, x_c, nu, a)
+    xs = @. (d.xs - x_c) * d.L^(1 / nu)
+    ys = @. d.ys - a * log(d.L)
+    return ScalingCollapse.Data(d.L, xs, ys, d.es)
 end
-```
-`p_names` should be a vector of strings containing the names of the parameters used in the
-scaling function. `x_scale` and `y_scale` are strings containing the scaling functions
-for the x and y values respectively. These are just used for display purposes.
 
-A new preset can then be added like so:
-```julia
-import ScalingCollapse: handle_preset
-function handle_preset(::Val{:my_custom_preset}; kwargs...)
-    f = _my_custom_scaling
-    p_names = ["p1", "p2"]
-    x_scale = "(x - p1) * L^(1/p2)"
-    y_scale = "y"
-    return f, p_names, x_scale, y_scale
+function ScalingCollapse.handle_preset(::Val{:log_shift}; kwargs...)
+    p_names = get(kwargs, :p_names, ["x_c", "nu", "a"])
+    x_scale = "(x - \$(p_names[1])) * L^(1/\$(p_names[2]))"
+    y_scale = "y - \$(p_names[3]) * log(L)"
+    return log_shift, p_names, x_scale, y_scale
 end
-```
 
-We can now use the new preset like so:
-```julia
-sf = ScalingFunction(:my_custom_preset)
+sf = ScalingFunction(:log_shift; p_names=["T_c", "nu", "a"], nu=1.0)
 ```
 """
 function handle_preset end
@@ -321,19 +264,35 @@ function ScalingFunction(f::Function; kwargs...)
             throw(ArgumentError("Please specify either :p_names or :N_parameters"))
         end
     end
-    x_scale = get(kwargs, :x_scale, "tmp")
-    y_scale = get(kwargs, :y_scale, "tmp")
+    x_scale = get(kwargs, :x_scale, "custom scaling (set x_scale)")
+    y_scale = get(kwargs, :y_scale, "custom scaling (set y_scale)")
     return ScalingFunction(f, p_names, x_scale, y_scale; kwargs...)
 end
 
+"""
+    ScalingCollapse.n_parameters(sf::ScalingFunction)
+
+The number of free (not fixed) parameters of `sf`.
+"""
 function n_parameters(sf::ScalingFunction)
     return length(sf.free_idxs)
 end
 
+"""
+    ScalingCollapse.scaled_p_names(sf::ScalingFunction)
+
+The names of the free (not fixed) parameters of `sf`, in the order of `p_space`,
+`starting_ps`, `optimal_ps` and `optimal_ps_error`.
+"""
 function scaled_p_names(sf::ScalingFunction)
     return sf.p_names[sf.free_idxs]
 end
 
+"""
+    ScalingCollapse.fixed_p_names(sf::ScalingFunction)
+
+The names of the fixed parameters of `sf`.
+"""
 function fixed_p_names(sf::ScalingFunction)
     return sf.p_names[sf.fixed_idxs]
 end

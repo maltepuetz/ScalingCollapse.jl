@@ -1,10 +1,11 @@
 // VENDORED from DocumenterVitepress (template/src/.vitepress/config.mts).
 //
 // DocumenterVitepress substitutes its own copy only when this file is absent, so
-// this copy is frozen at the version it was taken from. There are two local
-// changes, both marked below: the favicon links (DocumenterVitepress emits a
+// this copy is frozen at the version it was taken from. There are three local
+// changes, all marked below: the favicon links (DocumenterVitepress emits a
 // single hardcoded favicon.ico link and offers no hook for a second, so it
-// cannot follow the reader's light/dark browser theme), and the navbar logo.
+// cannot follow the reader's light/dark browser theme), the navbar logo, and the
+// style rule that switches the light and dark figures (docs/figure_theme.jl).
 //
 // On a DocumenterVitepress upgrade: diff this against the new template and
 // re-apply that one line. Every placeholder token in this file must stay intact
@@ -64,6 +65,10 @@ export default defineConfig({
     ['link', { rel: 'icon', media: '(prefers-color-scheme: light)', href: `${baseTemp.base}favicon-light.ico` }],
     ['link', { rel: 'icon', media: '(prefers-color-scheme: dark)',  href: `${baseTemp.base}favicon-dark.ico` }],
     ['script', {}, `(function(){var b=${JSON.stringify(baseTemp.base)},q=window.matchMedia('(prefers-color-scheme: dark)');function a(){var o=document.querySelectorAll('link[rel="icon"]');for(var i=0;i<o.length;i++)o[i].parentNode.removeChild(o[i]);var l=document.createElement('link');l.rel='icon';l.href=b+(q.matches?'favicon-dark.ico':'favicon-light.ico');document.head.appendChild(l);}q.addEventListener?q.addEventListener('change',a):q.addListener(a);a();})();`],
+    // LOCAL CHANGE: every figure is embedded twice (docs/figure_theme.jl); show the
+    // one that matches the VitePress theme toggle, which sets the class `dark` on <html>,
+    // centered in the content column.
+    ['style', {}, 'img.light-only,img.dark-only{display:block;margin-left:auto;margin-right:auto} html.dark img.light-only{display:none} html:not(.dark) img.dark-only{display:none}'],
     ['script', {src: `${getBaseRepository(baseTemp.base)}versions.js`}],
     // ['script', {src: '/versions.js'], for custom domains, I guess if deploy_url is available.
     ['script', {src: `${baseTemp.base}siteinfo.js`}],
