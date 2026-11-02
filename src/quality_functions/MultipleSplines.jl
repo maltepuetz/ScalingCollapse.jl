@@ -1,24 +1,45 @@
 """
-    MultipleSplines(; N_steps::Int=100, weight_density::Bool=true, interp::Symbol=:pchip)
+    MultipleSplines(; interp=:pchip, N_steps=100, weight_density=true, scan_mode=false)
 
-Quality function that interpolates the scaled data of every system size separately and
-compares the interpolated curves.
+The default quality function. It interpolates the rescaled data of every system size
+separately and measures how much the interpolated curves differ.
 
-# How does it work?
-TO BE DOCUMENTED
+# How it works
+The curves are compared at `N_steps` evenly spaced points `x_k` in the window where all
+rescaled sizes overlap (intersected with `dx`). With the interpolated values `y_l(x_k)` of
+system size `l`, normalized so that all of them lie between 0 and 1 (and the errors
+scaled alike), the quality is
+- without error bars: the variance across system sizes, averaged over the points,
+
+      S = 1/N_steps Σ_k var_l(y_l(x_k));
+
+- with error bars: the error-weighted squared deviation from the mean over system sizes,
+
+      S = Σ_k Σ_l ρ_l (y_l(x_k) - ȳ(x_k))² / (e_l(x_k)² + ē(x_k)²) / (N_steps Σ_l ρ_l),
+
+    where `e_l` is the linearly interpolated error of size `l`, `ē = sqrt(Σ_l e_l²) / n`
+    the error of the mean `ȳ` of the `n` sizes, and `ρ_l` the number of data points of size
+    `l` per unit of rescaled x in the window (or 1 with `weight_density=false`).
+
+Since the curves are compared on a fixed set of points, the quality changes smoothly with
+the parameters, also for data on uniform grids (see `Linear` for the alternative). The
+normalization makes the quality independent of the scale of y, which matters when y is
+rescaled with a power of `L`.
 
 # Keyword arguments
-- `N_steps::Int=100`: Number of points used in the interval to calculate the quality.
-- `weight_density::Bool=true`: If `true`, the quality is weighted by the density of data
-  points in the interval.
-- `interp::Symbol=:pchip`: How the data of each system size are interpolated.
+- `interp::Symbol=:pchip`: the interpolation of every system size.
     - `:pchip` (default): monotone piecewise-cubic Hermite interpolation (Fritsch–Carlson).
-      It never overshoots between data points, so closely spaced noisy points (e.g. on an
-      irregular x grid) do not make the interpolant oscillate. A local extremum of the
-      interpolant always lies on a data point, so peaks are cut off at the highest data point.
-    - `:cubic`: cubic interpolating spline (Dierckx). It is more accurate for noise-free
-      data, especially for master curves with peaks or several extrema, but it oscillates
-      for noisy data on irregular grids. It needs at least 4 data points per system size.
+        It never overshoots between data points, so noisy points on irregular x grids do
+        not make the curve oscillate. A local extremum of the curve always lies on a data
+        point, so a peak is cut off at its highest data point.
+    - `:cubic`: cubic interpolating spline (Dierckx.jl). More accurate for noise-free data,
+        especially for master curves with peaks or several extrema, but it oscillates for
+        noisy data on irregular grids. Needs at least 4 data points per system size.
+- `N_steps::Int=100`: the number of points at which the curves are compared.
+- `weight_density::Bool=true`: with error bars, weight every system size by its density
+    of data points in the window, so that sizes with many points count more.
+- `scan_mode::Bool=false`: ignore the error bars (always use the unweighted form). This
+    is the setting of the default `quality_scan` of [`ScalingProblem`](@ref).
 """
 struct MultipleSplines <: QualityFunction
     N_steps::Int

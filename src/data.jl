@@ -1,13 +1,18 @@
 """
-    Data(L::Int, xs::Vector{Float64}, ys::Vector{Float64}, es::Vector{Float64})
+    ScalingCollapse.Data(L, xs, ys[, es])
 
-A Data object stores the data for a single system size. Sorted by the x values.
+The data of one system size `L`: x values `xs`, y values `ys` and y errors `es` (zeros if
+omitted). `ys` can instead be a vector of `Measurement`s, which is split into values and
+errors. The constructor sorts the points by x and stores the absolute values of the errors.
+
+[`ScalingProblem`](@ref) stores one `Data` per system size, and custom scaling functions
+receive and return `Data` (see [`ScalingFunction`](@ref)).
 
 # Fields
-- `L::Int`: system size
-- `xs::Vector{Float64}`: x values
-- `ys::Vector{Float64}`: y values
-- `es::Vector{Float64}`: y error values
+- `L::Int`: the system size
+- `xs::Vector{Float64}`: the x values, sorted
+- `ys::Vector{Float64}`: the y values
+- `es::Vector{Float64}`: the y errors
 """
 struct Data
     L::Int               # system size

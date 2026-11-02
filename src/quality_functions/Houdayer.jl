@@ -1,15 +1,15 @@
 """
     Houdayer()
 
-Quality function that uses the Houdayer & Hartmann method to calculate the quality of a
-scaling. It is less stable than the spline methods and the Linear method and therefore not
-recommended.
+Quality function of Houdayer & Hartmann, Phys. Rev. B 70, 014418 (2004). It is biased on
+coarse data grids (see below) and therefore not recommended.
 
-# How does it work?
+# How it works
 Following Houdayer & Hartmann, Phys. Rev. B 70, 014418 (2004), for every scaled data point
 `(x_ij, y_ij)` of system size `i` in the overlap interval, the master curve is approximated
 by a weighted linear least-squares fit to the two data points of every other system size
-that bracket `x_ij`. With the fit value `Y_ij` and its variance `dY²_ij`, the quality is
+that bracket `x_ij`. The overlap interval is the window covered by all sizes, intersected
+with `dx`. With the fit value `Y_ij` and its variance `dY²_ij`, the quality is
 
     S = 1/N Σ_ij (y_ij - Y_ij)² / (e_ij² + dY²_ij).
 
@@ -23,7 +23,8 @@ spacing, and thereby lowers `S`, so on coarse data grids the fitted `ν` comes o
 large. For example, on noise-free synthetic data with 4 sizes and 41 points each (only
 about 5 of the largest size lie in the interval), `ν` came out 2-3% too large; with 161
 points per size, 0.1%.
-The bias vanishes as the grid is refined. `Linear` and `MultipleSplines` do not show it.
+The bias vanishes as the grid is refined. [`Linear`](@ref) and [`MultipleSplines`](@ref) do
+not show it.
 
 # Ruggedness
 The bracketing data points change discontinuously as scaled points of different sizes pass

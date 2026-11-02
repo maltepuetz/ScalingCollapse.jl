@@ -121,28 +121,32 @@ end
 """
     StepSimplexer(steps)
 
-Initial Nelder-Mead simplex with one step per free parameter: vertex `i + 1` is the
-starting point with `steps[i]` added to parameter `i`. Use it as
-`optimizer=Optim.NelderMead(initial_simplex=StepSimplexer(steps))` when the free parameters
-live on very different scales. `Optim.AffineSimplexer(a, b)` moves every parameter by
-`b * p + a`, which follows the value of the parameter rather than its scale in the problem;
-e.g. the default (`a = 0.025`, `b = 0.1`) moves a critical point `p_c ≈ 0.5` by 0.075, even
-if the data only span a window of width 1e-3 around it.
+Initial Nelder–Mead simplex with one step per free parameter: vertex `i + 1` is the
+starting point with `steps[i]` added to parameter `i`. Pass it as
+`optimizer=Optim.NelderMead(initial_simplex=StepSimplexer(steps))` to
+[`ScalingProblem`](@ref) when the free parameters live on very different scales.
 
-`steps` must have one finite, nonzero entry per free parameter (in the order of
-`scaled_p_names(sf)`; fixed parameters have no entry). A step of the order of the expected
-error of the parameter is a good choice. Steps for which the quality is not finite are
-halved, as for any initial simplex. In the profile error analysis (`error=:profile`), the
-inner fits use only the steps of the parameters they re-fit. With an affine simplex (such
-as the default), the inner fits are instead followed by a refit with one step per re-fitted
-parameter equal to its conditional error, so they also resolve quality valleys much
-narrower than the affine steps.
+The default `Optim.AffineSimplexer(a=0.025, b=0.1)` moves every parameter `p` by `0.1p +
+0.025`, which follows the value of the parameter rather than its scale in the problem: it
+moves a critical point `p_c ≈ 0.5` by 0.075, even if the data only span a window of width
+1e-3 around it.
+
+`steps` must have one finite, nonzero entry per free parameter, in the order of
+`ScalingCollapse.scaled_p_names(sf)` (fixed parameters have no entry). A step of the order
+of the expected error of the parameter is a good choice. Steps for which the quality is not
+finite are halved, as for any initial simplex. In the profile error analysis, the inner fits
+use only the steps of the parameters they re-fit. (With an affine simplex, the inner fits
+are instead followed by a second fit with one step per re-fitted parameter equal to its
+conditional error.)
 
 # Examples
 ```julia
-optimizer = ScalingCollapse.Optim.NelderMead(initial_simplex=StepSimplexer([1e-3, 0.05]))
-ScalingProblem(xs, ys, Ls; sf=ScalingFunction(:x), p_space=[0.48:0.002:0.52, 0.8:0.1:2.0],
-    optimizer=optimizer)
+using ScalingCollapse: Optim
+ScalingProblem(xs, ys, Ls;
+    sf=ScalingFunction(:x; p_names=["p_c", "nu"]),
+    p_space=[0.48:0.002:0.52, 0.8:0.1:2.0],
+    optimizer=Optim.NelderMead(initial_simplex=StepSimplexer([1e-3, 0.05])),
+)
 ```
 """
 struct StepSimplexer <: Optim.Simplexer
