@@ -5,27 +5,78 @@
    absent from docs/src/.vitepress/theme/, so the other theme files still come
    from the installed version. */
 
-/* Hero glow behind the logo. The default gradients have hard color stops (two
-   stops at 30%) and, in dark mode, a gray close to the page background. Under
-   the large blur filter these render differently depending on how the browser
-   paints the element: the page looks different on first load than after
-   toggling the theme. Smooth gradients look the same either way.
+/* Hero glow behind the logo: one soft blob per dot of the logo (purple top
+   right, green in the middle, red bottom left).
 
-   The glow is one radial blob per dot of the logo (purple top right, green in
-   the middle, red bottom left). Each blob fades out well inside the element,
-   a disc of up to 320px, so the blur shows no round edge. */
+   The default glow is a gradient under `filter: blur()`. Safari renders that
+   filter differently on first load than after a theme toggle (the blur is
+   drawn by the compositor, inside the transformed .image-container), so the
+   glow uses no filter: each blob is a radial gradient whose stops follow a
+   Gaussian, exp(-4.5 t^2) at t = 0, 0.2, ..., 1 of its radius. Every blob ends
+   inside the element's disc (border-radius: 50%), so no edge shows. The
+   element is 1.75 times its default size, since there is no blur to spread the
+   glow. The --glow-* colors carry the peak opacity of each blob. */
 :root {
+  --glow-purple: rgb(170 121 193 / 0.36);
+  --glow-green: rgb(56 152 38 / 0.34);
+  --glow-red: rgb(213 99 92 / 0.36);
+}
+
+/* style.css sets both variables under :root.dark, which outranks :root. */
+:root,
+:root.dark {
   --vp-home-hero-image-background-image:
-    radial-gradient(circle at 72% 28%, #aa79c199, transparent 40%),
-    radial-gradient(circle at 50% 50%, #389826b3, transparent 50%),
-    radial-gradient(circle at 28% 72%, #d5635c99, transparent 40%);
-  /* On white, the default blur of up to 72px mixes the three colors to green. */
-  --vp-home-hero-image-filter: blur(44px);
+    radial-gradient(
+      30% 30% at 64% 36%,
+      var(--glow-purple),
+      color-mix(in srgb, var(--glow-purple) 83.5%, transparent) 20%,
+      color-mix(in srgb, var(--glow-purple) 48.7%, transparent) 40%,
+      color-mix(in srgb, var(--glow-purple) 19.8%, transparent) 60%,
+      color-mix(in srgb, var(--glow-purple) 5.6%, transparent) 80%,
+      transparent
+    ),
+    radial-gradient(
+      38% 38% at 50% 50%,
+      var(--glow-green),
+      color-mix(in srgb, var(--glow-green) 83.5%, transparent) 20%,
+      color-mix(in srgb, var(--glow-green) 48.7%, transparent) 40%,
+      color-mix(in srgb, var(--glow-green) 19.8%, transparent) 60%,
+      color-mix(in srgb, var(--glow-green) 5.6%, transparent) 80%,
+      transparent
+    ),
+    radial-gradient(
+      30% 30% at 36% 64%,
+      var(--glow-red),
+      color-mix(in srgb, var(--glow-red) 83.5%, transparent) 20%,
+      color-mix(in srgb, var(--glow-red) 48.7%, transparent) 40%,
+      color-mix(in srgb, var(--glow-red) 19.8%, transparent) 60%,
+      color-mix(in srgb, var(--glow-red) 5.6%, transparent) 80%,
+      transparent
+    );
+  --vp-home-hero-image-filter: none;
 }
 
 :root.dark {
-  --vp-home-hero-image-background-image:
-    radial-gradient(circle at 72% 28%, #9558b26b, transparent 40%),
-    radial-gradient(circle at 50% 50%, #38982685, transparent 40%),
-    radial-gradient(circle at 28% 72%, #cb3c336b, transparent 40%);
+  --glow-purple: rgb(149 88 178 / 0.25);
+  --glow-green: rgb(56 152 38 / 0.28);
+  --glow-red: rgb(203 60 51 / 0.25);
+}
+
+.VPHero .image-bg {
+  width: 336px;
+  height: 336px;
+}
+
+@media (min-width: 640px) {
+  .VPHero .image-bg {
+    width: 448px;
+    height: 448px;
+  }
+}
+
+@media (min-width: 960px) {
+  .VPHero .image-bg {
+    width: 560px;
+    height: 560px;
+  }
 }
