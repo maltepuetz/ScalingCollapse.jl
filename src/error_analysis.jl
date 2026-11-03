@@ -67,14 +67,19 @@ function _profile_errors!(sp; max_restarts::Int=3, refit::Bool=true)
     sp.verbose && @info "Starting error analysis..."
     _has_valid_minimum(sp) || return nothing
 
+    # the quality function of the conditional roots and of the profile's inner fits
+    ws = _workspace(sp)
+    q = _quality_function(sp, sp.quality, ws)
+    q_profile = _quality_function(sp, sp.quality, ws; check_bounds=false)
+
     # the conditional roots start the profile brackets and set the steps of the inner fits
-    roots = [_conditional_roots(sp, i) for i in eachindex(sp.optimal_ps)]
+    roots = [_conditional_roots(sp, q, i) for i in eachindex(sp.optimal_ps)]
     simplexes = _inner_simplexes(sp, first.(roots))
 
     # stop at the first parameter whose profile finds a better fit inside p_space
     lower = nothing
     for i in eachindex(sp.optimal_ps)
-        sp.optimal_ps_error[i], record = _profile_error(sp, i, roots[i], simplexes)
+        sp.optimal_ps_error[i], record = _profile_error(sp, q_profile, i, roots[i], simplexes)
         if _found_lower(sp, record)
             lower = record
             break
@@ -129,9 +134,10 @@ function _reoptimize!(sp, ps, q)
 end
 
 # Profile error of parameter i and the record of its profile evaluations, from its conditional
-# roots (deltas, f0) = _conditional_roots(sp, i); simplexes(nuisance) are the initial simplexes
-# of the inner fits of the parameters nuisance.
-function _profile_error(sp, i::Int, (deltas, f0), simplexes)
+# roots (deltas, f0) = _conditional_roots(sp, q, i); simplexes(nuisance) are the initial
+# simplexes of the inner fits of the parameters nuisance. q(ps) is the quality (see
+# _quality_function).
+function _profile_error(sp, q::Q, i::Int, (deltas, f0), simplexes) where {Q}
     record = _ProfileRecord(sp)
 
     # the conditional roots are the starting points of the profile brackets
@@ -139,7 +145,7 @@ function _profile_error(sp, i::Int, (deltas, f0), simplexes)
 
     widths = Union{Nothing,Float64}[]
     for d in deltas
-        push!(widths, _profile_side(sp, i, d, f0, simplexes; record))
+        push!(widths, _profile_side(sp, q, i, d, f0, simplexes; record))
         # the analysis is redone from a better fit (see _profile_errors!)
         _found_lower(sp, record) && return NaN, record
     end
@@ -170,8 +176,8 @@ end
 # the conditional root d, where the profile quality reaches error_threshold[i] times the
 # minimum. f0 = quality / minimum - error_threshold[i] at the fit. Returns nothing if no such
 # point is found, and adds the reason to record.failures.
-function _profile_side(sp, i::Int, d::Float64, f0::Float64, simplexes;
-    record::_ProfileRecord=_ProfileRecord(sp))
+function _profile_side(sp, q::Q, i::Int, d::Float64, f0::Float64, simplexes;
+    record::_ProfileRecord=_ProfileRecord(sp)) where {Q}
 
     side = d < 0 ? "below" : "above"
     threshold = sp.error_threshold[i]
@@ -187,21 +193,21 @@ function _profile_side(sp, i::Int, d::Float64, f0::Float64, simplexes;
     # profile / minimum - threshold; NaN if the profile quality is invalid
     function f(x)
         warm = last(visited[argmin([abs(v[1] - x) for v in visited])])
-        q, nu, converged = _profile_value(sp, i, x, warm, simplexes(nuisance))
+        qx, nu, converged = _profile_value(sp, q, i, x, warm, simplexes(nuisance))
         converged || (record.n_failed += 1)
-        isfinite(q) || return NaN
+        isfinite(qx) || return NaN
         push!(visited, (x, nu))
-        if q < sp.minimum
+        if qx < sp.minimum
             ps = copy(sp.optimal_ps)
             ps[i] += x
             ps[nuisance] .= nu
             if !_inside_p_space(sp, ps)
-                record.lower_outside |= _is_lower(sp, q)
-            elseif q < record.lowest_q
-                record.lowest_q, record.lowest_ps = q, ps
+                record.lower_outside |= _is_lower(sp, qx)
+            elseif qx < record.lowest_q
+                record.lowest_q, record.lowest_ps = qx, ps
             end
         end
-        return q / sp.minimum - threshold
+        return qx / sp.minimum - threshold
     end
 
     # bracket outward from the conditional root (at least a small step relative to the
@@ -249,7 +255,8 @@ end
 # the nuisance values and whether the inner fit converged. The quality is never above either
 # candidate's quality, so the profile width is never below the conditional width. The inner fit
 # runs Nelder-Mead from each initial simplex of simplexes in turn.
-function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64}, simplexes)
+function _profile_value(sp, quality::Q, i::Int, x::Float64, warm::Vector{Float64},
+    simplexes) where {Q}
     nuisance = _nuisance_indices(sp, i)
     lower = Float64[first(sp.p_space[j]) for j in nuisance]
     upper = Float64[last(sp.p_space[j]) for j in nuisance]
@@ -257,8 +264,10 @@ function _profile_value(sp, i::Int, x::Float64, warm::Vector{Float64}, simplexes
     ps[i] += x
     function f(nu)
         all(k -> lower[k] <= nu[k] <= upper[k], eachindex(nu)) || return Inf
-        ps[nuisance] .= nu
-        return _nan_to_inf(sp.quality(sp, ps; check_bounds=false))
+        for (k, j) in enumerate(nuisance)
+            ps[j] = nu[k]
+        end
+        return _nan_to_inf(quality(ps))
     end
 
     conditional = sp.optimal_ps[nuisance]
@@ -327,8 +336,9 @@ function _conditional_errors!(sp)
     sp.verbose && @info "Starting error analysis..."
     _has_valid_minimum(sp) || return nothing
 
+    q = _quality_function(sp, sp.quality, _workspace(sp))
     for i in eachindex(sp.optimal_ps)
-        deltas, _ = _conditional_roots(sp, i)
+        deltas, _ = _conditional_roots(sp, q, i)
         sp.optimal_ps_error[i] = any(isnothing, deltas) ? _no_crossing_error(sp, i) :
                                  maximum(abs, deltas)
     end
@@ -347,17 +357,15 @@ function _has_valid_minimum(sp)
     return false
 end
 
-# Roots (d₋, d₊) of the quality with all other parameters at their optimum (nothing for a side
-# without a root), and f_root(0.0) = quality / minimum - error_threshold[i] at the fit.
-function _conditional_roots(sp, i)
+# Roots (d₋, d₊) of the quality q(ps) with all other parameters at their optimum (nothing for a
+# side without a root), and f_root(0.0) = quality / minimum - error_threshold[i] at the fit.
+function _conditional_roots(sp, q::Q, i) where {Q}
 
     # define the function to find roots of
+    ps = copy(sp.optimal_ps)
     function f_root(x)
-        y = sp.quality(
-            sp,
-            sp.optimal_ps .+ x .* _one_vector(i, length(sp.optimal_ps))
-        ) / sp.minimum - sp.error_threshold[i]
-        return y
+        ps[i] = sp.optimal_ps[i] + x
+        return q(ps) / sp.minimum - sp.error_threshold[i]
     end
 
     # f_root(0) < 0 since error_threshold > 1
@@ -383,12 +391,6 @@ function _no_crossing_error(sp, i)
           "times its minimum in both directions (or becomes NaN). The error is " *
           "set to NaN."
     return NaN
-end
-
-function _one_vector(i, L)
-    res = zeros(L)
-    res[i] = 1.0
-    return res
 end
 
 # find x (in the direction of `step`) with f(x) >= 0; returns (x, f(x)) or nothing
@@ -454,10 +456,11 @@ function _bootstrap_errors!(sp)
     data = sp.data
     samples = Vector{Float64}[]
     n_unconverged = 0
+    # the resampled data have the sizes of the data, so they share one workspace
+    f = _nan_to_inf ∘ _quality_function(sp, sp.quality, _workspace(sp); check_bounds=true)
     try
         for _ in 1:sp.n_bootstrap
             sp.data = [_resample(sp.rng, d) for d in data]
-            f = ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true))
             result = optimize(f, sp.optimal_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
             # refits without any finite quality are dropped
             isfinite(Optim.minimum(result)) || continue

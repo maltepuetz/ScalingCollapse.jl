@@ -39,12 +39,16 @@ struct Linear <: QualityFunction end
 
 
 ##### Linear Quality Function #####
-function (::Linear)(sp, parameters; check_bounds=false)
+function (qf::Linear)(sp, parameters; check_bounds=false)
+    return qf(Workspace(sp), sp, parameters; check_bounds)
+end
+
+function (qf::Linear)(ws::Workspace, sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    check_bounds && _out_of_bounds(sp, parameters) && return Inf
+    check_bounds && _out_of_bounds(ws, parameters) && return Inf
 
-    scaled_data = _scale_all(sp, parameters)
+    scaled_data = _scale_all!(ws, sp.data, parameters)
 
     # set interval in which we want to optimize
     interval = _overlap_interval(scaled_data, sp.dx)
@@ -53,21 +57,23 @@ function (::Linear)(sp, parameters; check_bounds=false)
     interval[1] <= interval[2] || return Inf
 
     # all data points strictly inside the interval, sorted by x
-    ranges = map(scaled_data) do d
+    ranges = ws.ranges
+    for (l, d) in enumerate(scaled_data)
         i_l = max(1, searchsortedlast(d.xs, interval[1]) + 1)
         i_r = min(length(d.xs), searchsortedfirst(d.xs, interval[2]) - 1)
-        return i_l:i_r
+        ranges[l] = i_l:i_r
     end
 
     # the linear interpolation needs at least 3 data points in the interval
     sum(length, ranges) < 3 && return Inf
 
-    xs, ys, es = _merge_sorted(scaled_data, ranges)
+    xs, ys, es = ws.xs, ws.ys, ws.es
+    n = _merge_sorted!(xs, ys, es, ws.next, scaled_data, ranges)
 
     # calculate quality of the scaling
     S = 0.0
     if sp.errors_defined
-        for i in eachindex(xs)[2:end-1]
+        for i in 2:n-1
             # interpolate linearly
             w_l, w_r = interpolation_weights(xs, i)
             ybar = w_l * ys[i-1] + w_r * ys[i+1]
@@ -75,14 +81,14 @@ function (::Linear)(sp, parameters; check_bounds=false)
             S += (ys[i] - ybar)^2 / expected_var
         end
     else
-        for i in eachindex(xs)[2:end-1]
+        for i in 2:n-1
             # interpolate linearly
             w_l, w_r = interpolation_weights(xs, i)
             ybar = w_l * ys[i-1] + w_r * ys[i+1]
             S += (ys[i] - ybar)^2
         end
     end
-    S /= (length(xs) - 2)
+    S /= (n - 2)
     return S
 end
 

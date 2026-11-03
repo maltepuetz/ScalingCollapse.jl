@@ -448,6 +448,8 @@ function _check_data(data, quality, quality_scan, skip_scan)
     return nothing
 end
 
+_workspace(sp::ScalingProblem) = Workspace(sp)
+
 # call the scaling function once to catch signature and return type mistakes early
 function _check_scaling_function(sf, d, ps)
     signature = "f(d::ScalingCollapse.Data, $(join(sf.p_names, ", "))) -> ScalingCollapse.Data"

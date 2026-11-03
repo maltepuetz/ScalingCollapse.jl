@@ -103,6 +103,13 @@ function _allocations(q, sp, ps)
     return @allocations q(sp, ps)
 end
 
+# number of allocations of g(ps) after compilation (in a function: at the scope of a loop,
+# Julia 1.10 counts the boxed loop variable g)
+function _allocations(g, ps)
+    g(ps)
+    return @allocations g(ps)
+end
+
 @testset "Quality functions match the previous implementations" begin
 
     @testset "MultipleSplines bit for bit" begin
@@ -209,7 +216,48 @@ end
             @test n_large < 2 * n_small
         end
         # with error bars, MultipleSplines propagated the uncertainties with Measurements.jl,
-        # which allocated about 13000 times here (now about 30)
+        # which allocated about 13000 times here (now about 70 without a workspace, see below)
         @test _allocations(MultipleSplines(), small, [0.5, 1.0]) < 2000
+    end
+
+    @testset "Quality functions do not allocate with a workspace" begin
+        rng = Xoshiro(5)
+        Ls = [8, 16, 32]
+        xs = [sort!(0.3 .+ 0.4 .* rand(rng, 40)) for _ in Ls]
+        ys = [tanh.((x .- 0.5) ./ 0.5 .* L) .* L^0.1 .+ 0.01 .* randn(rng, 40) for (x, L) in zip(xs, Ls)]
+        es = [fill(0.01, 40) for _ in Ls]
+        sfs = (
+            (ScalingFunction(:x), [0.5, 1.0]),
+            (ScalingFunction(:x; relative=true), [0.5, 1.0]),
+            (ScalingFunction(:xy), [0.5, 1.0, 0.1]),
+            (ScalingFunction(:xny; relative=true), [0.5, 1.0, -0.1]),
+            (ScalingFunction(:xy; p2=1.0), [0.5, 0.1]),
+            # a negative x factor reverses the order of the points
+            (ScalingFunction(:xy), [0.5, -1.0, -0.1]),
+        )
+        for (sf, ps) in sfs, errors in (true, false)
+            sp = ScalingProblem(xs, ys, errors ? es : [zeros(40) for _ in Ls], Ls; sf,
+                starting_ps=ps, p_space=[-2.0:0.1:2.0 for _ in ps], error=false)
+            for q in (MultipleSplines(), MultipleSplines(scan_mode=true), Linear(), Houdayer())
+                g = ScalingCollapse._quality_function(sp, q, ScalingCollapse.Workspace(sp))
+                @test _allocations(g, ps) == 0
+                # the same value as without a workspace
+                @test isequal(g(ps), q(sp, ps))
+            end
+        end
+
+        # the other quality functions and custom scaling functions use the workspace too
+        custom = ScalingFunction((d, a, b) -> ScalingCollapse._absolute_power_scaling(d, a, b);
+            p_names=["a", "b"])
+        for sf in (ScalingFunction(:x), custom)
+            sp = ScalingProblem(xs, ys, es, Ls; sf, starting_ps=[0.5, 1.0], error=false)
+            for q in (MultipleSplines(), MultipleSplines(interp=:cubic), SingleSpline(),
+                Linear(), Houdayer())
+                ws = ScalingCollapse.Workspace(sp)
+                for ps in ([0.5, 1.0], [0.48, 1.2], [0.52, 0.9])
+                    @test isequal(q(ws, sp, ps), q(sp, ps))
+                end
+            end
+        end
     end
 end
