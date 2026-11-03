@@ -14,7 +14,8 @@ instead.
 - With several Julia threads, the scan, the fits from several starting points, the error
   analysis (profile, conditional and bootstrap) and `residuals` run in parallel, with the
   same results as on one thread. The new keyword `threads=false` of `ScalingProblem`
-  turns this off, e.g. for a custom quality or scaling function that is not thread-safe.
+  turns this off, e.g. for a custom quality or scaling function that is not thread-safe
+  (#69).
 
 ### Documentation
 
