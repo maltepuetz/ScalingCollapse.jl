@@ -15,7 +15,7 @@ instead.
   with error bars about 3×, `Houdayer` about 2.5×, `Linear` about 2×, so a default fit
   with error bars takes about a third of the time. The results are unchanged, except that
   `MultipleSplines` with error bars interpolates the error bars exactly linearly instead
-  of with a Dierckx spline, which changes its value in the last digits.
+  of with a Dierckx spline, which changes its value in the last digits (#67).
 
 ## 0.3.0 - 2026-11-02
 
