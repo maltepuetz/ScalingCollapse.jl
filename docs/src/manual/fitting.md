@@ -141,6 +141,15 @@ ScalingProblem(xs, ys, Ls;
 Vertices of the initial simplex outside `p_space`, or where the quality is not finite, are
 moved towards the starting point automatically.
 
+## Threads
+
+Started with several threads, e.g. `julia --threads=auto`, a `ScalingProblem` spreads its
+work over them: the scan, the fits from several starting points, the error analysis and
+[`residuals`](@ref). The profile runs one task per parameter and side, the bootstrap splits
+its refits. The results are the same as on one thread, also for the bootstrap with a seeded
+`rng`. A custom quality or scaling function is then called from several threads at once and
+must not modify shared state; `threads=false` keeps everything on one thread.
+
 ## Troubleshooting
 
 **"The quality function is infinite for every parameter combination in p_space."**

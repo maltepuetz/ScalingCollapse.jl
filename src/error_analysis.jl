@@ -67,19 +67,28 @@ function _profile_errors!(sp; max_restarts::Int=3, refit::Bool=true)
     sp.verbose && @info "Starting error analysis..."
     _has_valid_minimum(sp) || return nothing
 
-    # the quality function of the conditional roots and of the profile's inner fits
-    ws = _workspace(sp)
-    q = _quality_function(sp, sp.quality, ws)
-    q_profile = _quality_function(sp, sp.quality, ws; check_bounds=false)
-
     # the conditional roots start the profile brackets and set the steps of the inner fits
-    roots = [_conditional_roots(sp, q, i) for i in eachindex(sp.optimal_ps)]
+    threaded = _threaded(sp)
+    roots = _tmap((q, i) -> _conditional_roots(sp, q, i), _task_quality(sp),
+        collect(eachindex(sp.optimal_ps)), threaded)
     simplexes = _inner_simplexes(sp, first.(roots))
+
+    # the two sides of every parameter with conditional roots on both sides, each with its own
+    # record (in parallel tasks if threaded)
+    sides = [(i, d) for i in eachindex(sp.optimal_ps) if !any(isnothing, first(roots[i]))
+             for d in first(roots[i])]
+    side_results = _tmap(_task_quality(sp; check_bounds=false), sides, threaded) do q, (i, d)
+        record = _ProfileRecord(sp)
+        return _profile_side(sp, q, i, d, last(roots[i]), simplexes; record), record
+    end
 
     # stop at the first parameter whose profile finds a better fit inside p_space
     lower = nothing
+    k = 0
     for i in eachindex(sp.optimal_ps)
-        sp.optimal_ps_error[i], record = _profile_error(sp, q_profile, i, roots[i], simplexes)
+        results = any(isnothing, first(roots[i])) ? nothing : side_results[k+1:k+2]
+        isnothing(results) || (k += 2)
+        sp.optimal_ps_error[i], record = _profile_error(sp, i, results)
         if _found_lower(sp, record)
             lower = record
             break
@@ -133,19 +142,25 @@ function _reoptimize!(sp, ps, q)
     return nothing
 end
 
-# Profile error of parameter i and the record of its profile evaluations, from its conditional
-# roots (deltas, f0) = _conditional_roots(sp, q, i); simplexes(nuisance) are the initial
-# simplexes of the inner fits of the parameters nuisance. q(ps) is the quality (see
-# _quality_function).
-function _profile_error(sp, q::Q, i::Int, (deltas, f0), simplexes) where {Q}
+# the quality q(ps) of one task, with its own workspace (see _quality_function, _tmap)
+function _task_quality(sp; check_bounds=nothing)
+    return () -> _quality_function(sp, sp.quality, _workspace(sp); check_bounds)
+end
+
+# Profile error of parameter i and the record of its profile evaluations, from the results
+# (width, record) of _profile_side for its two sides, or nothing if a conditional root is
+# missing. The records of the sides are combined as if the sides had been evaluated one after
+# the other with one record, which stops after a side that finds a better fit.
+function _profile_error(sp, i::Int, results)
     record = _ProfileRecord(sp)
 
     # the conditional roots are the starting points of the profile brackets
-    any(isnothing, deltas) && return _no_crossing_error(sp, i), record
+    isnothing(results) && return _no_crossing_error(sp, i), record
 
     widths = Union{Nothing,Float64}[]
-    for d in deltas
-        push!(widths, _profile_side(sp, q, i, d, f0, simplexes; record))
+    for (width, side_record) in results
+        _continue!(record, side_record)
+        push!(widths, width)
         # the analysis is redone from a better fit (see _profile_errors!)
         _found_lower(sp, record) && return NaN, record
     end
@@ -170,6 +185,18 @@ function _profile_error(sp, q::Q, i::Int, (deltas, f0), simplexes) where {Q}
     end
     any(isnothing, widths) && return NaN, record
     return maximum(abs, widths), record
+end
+
+# record after the evaluations of next, which started from a new _ProfileRecord: the same as if
+# they had been recorded in record (its lowest quality only changes to a strictly lower one)
+function _continue!(record::_ProfileRecord, next::_ProfileRecord)
+    record.n_failed += next.n_failed
+    if next.lowest_q < record.lowest_q
+        record.lowest_q, record.lowest_ps = next.lowest_q, next.lowest_ps
+    end
+    record.lower_outside |= next.lower_outside
+    append!(record.failures, next.failures)
+    return record
 end
 
 # Displacement (signed) of the first valid finite point outward from the fit, on the side of
@@ -336,9 +363,10 @@ function _conditional_errors!(sp)
     sp.verbose && @info "Starting error analysis..."
     _has_valid_minimum(sp) || return nothing
 
-    q = _quality_function(sp, sp.quality, _workspace(sp))
+    roots = _tmap((q, i) -> _conditional_roots(sp, q, i), _task_quality(sp),
+        collect(eachindex(sp.optimal_ps)), _threaded(sp))
     for i in eachindex(sp.optimal_ps)
-        deltas, _ = _conditional_roots(sp, q, i)
+        deltas, _ = roots[i]
         sp.optimal_ps_error[i] = any(isnothing, deltas) ? _no_crossing_error(sp, i) :
                                  maximum(abs, deltas)
     end
@@ -453,22 +481,35 @@ function _bootstrap_errors!(sp)
 
     sp.verbose && @info "Starting bootstrap error analysis..."
 
+    # all synthetic data sets first, so that they do not depend on the order of the refits
     data = sp.data
-    samples = Vector{Float64}[]
-    n_unconverged = 0
-    # the resampled data have the sizes of the data, so they share one workspace
-    f = _nan_to_inf ∘ _quality_function(sp, sp.quality, _workspace(sp); check_bounds=true)
-    try
-        for _ in 1:sp.n_bootstrap
-            sp.data = [_resample(sp.rng, d) for d in data]
-            result = optimize(f, sp.optimal_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
-            # refits without any finite quality are dropped
-            isfinite(Optim.minimum(result)) || continue
-            Optim.converged(result) || (n_unconverged += 1)
-            push!(samples, Optim.minimizer(result))
+    resampled = [[_resample(sp.rng, d) for d in data] for _ in 1:sp.n_bootstrap]
+
+    # the refits, in parallel tasks if threaded; a task refits a copy of sp whose data it
+    # replaces (the resampled data have the sizes of the data, so they share one workspace)
+    threaded = _threaded(sp)
+    function task_problem()
+        sp_task = threaded ? _copy(sp) : sp
+        f = _nan_to_inf ∘
+            _quality_function(sp_task, sp.quality, _workspace(sp_task); check_bounds=true)
+        return sp_task, f
+    end
+    results = try
+        _tmap(task_problem, resampled, threaded) do (sp_task, f), data_k
+            sp_task.data = data_k
+            return optimize(f, sp.optimal_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
         end
     finally
         sp.data = data
+    end
+
+    samples = Vector{Float64}[]
+    n_unconverged = 0
+    for result in results
+        # refits without any finite quality are dropped
+        isfinite(Optim.minimum(result)) || continue
+        Optim.converged(result) || (n_unconverged += 1)
+        push!(samples, Optim.minimizer(result))
     end
 
     n_dropped = sp.n_bootstrap - length(samples)
