@@ -9,6 +9,12 @@ instead.
 
 ## Unreleased
 
+### Documentation
+
+- The glow behind the logo on the documentation's home page is three soft blobs in the
+  colors of the logo's dots, in both themes, and looks the same on first load as after
+  toggling the theme (#66).
+
 ### Changed
 
 - The quality functions allocate less and run faster: the default `MultipleSplines()`
