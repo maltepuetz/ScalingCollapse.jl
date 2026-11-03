@@ -17,10 +17,12 @@ function parameter_scan!(sp)
 
     sp.verbose && @info "Scanning parameter space..."
     p_combos = _parameter_combinations(sp.p_space)
-    S_p_space = zeros(size(p_combos))
-    ws = _workspace(sp)
-    q_scan = _quality_function(sp, sp.quality_scan, ws; check_bounds=false)
-    _evaluate!(S_p_space, _nan_to_inf ∘ q_scan, p_combos)
+    threaded = _threaded(sp)
+    # the scan quality of one task, with its own workspace
+    scan_quality(check_bounds) = () -> _nan_to_inf ∘
+        _quality_function(sp, sp.quality_scan, _workspace(sp); check_bounds)
+    S = _tmap((q, ps) -> q(ps), scan_quality(false), vec(p_combos), threaded)
+    S_p_space = reshape(S, size(p_combos))
     all(isinf, S_p_space) && error(
         "The quality function is infinite for every parameter combination in p_space. " *
         "This usually means that the rescaled data of the different system sizes do not " *
@@ -51,14 +53,11 @@ function parameter_scan!(sp)
     sp.verbose && @info "Optimizing each starting point..."
 
     # optimize each starting point
-    loc_minima = zeros(length(loc_starting_ps))
-    loc_optimal_ps = Vector{Vector{Float64}}(undef, length(loc_starting_ps))
-    f = _nan_to_inf ∘ _quality_function(sp, sp.quality_scan, ws; check_bounds=true)
-    for (i, l_ps) in enumerate(loc_starting_ps)
-        result = optimize(f, l_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
-        loc_minima[i] = result.minimum
-        loc_optimal_ps[i] = result.minimizer
+    results = _tmap(scan_quality(true), loc_starting_ps, threaded) do f, l_ps
+        optimize(f, l_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
     end
+    loc_minima = [result.minimum for result in results]
+    loc_optimal_ps = [result.minimizer for result in results]
 
     # find global minimum
     indexmin = argmin(loc_minima)
@@ -73,11 +72,14 @@ function optimize_starting_ps!(sp, starts=[sp.starting_ps])
 
     sp.verbose && @info "Starting optimization of provided starting parameters..."
 
-    # optimize starting parameters
-    f = _nan_to_inf ∘ _quality_function(sp, sp.quality, _workspace(sp); check_bounds=true)
+    # optimize starting parameters (the quality of one task, with its own workspace)
+    quality = () -> _nan_to_inf ∘
+        _quality_function(sp, sp.quality, _workspace(sp); check_bounds=true)
+    results = _tmap(quality, starts, _threaded(sp)) do f, start
+        optimize(f, start, _bounded_optimizer(sp, f), sp.optimizer_options)
+    end
     result = nothing
-    for start in starts
-        r = optimize(f, start, _bounded_optimizer(sp, f), sp.optimizer_options)
+    for (start, r) in zip(starts, results)
         if isfinite(r.minimum) && (isnothing(result) || r.minimum < result.minimum)
             sp.starting_ps, result = start, r
         end
@@ -220,14 +222,6 @@ function _bounded_optimizer(sp, f)
         BoundedSimplexer(sp.optimizer.initial_simplex, lower, upper, f),
         sp.optimizer.parameters,
     )
-end
-
-# values[i] = f(p_combos[i]) for all parameter combinations (a function barrier for f)
-function _evaluate!(values, f::F, p_combos) where {F}
-    for (i, ps) in enumerate(p_combos)
-        values[i] = f(ps)
-    end
-    return values
 end
 
 # treat NaN values of the quality function as invalid parameters

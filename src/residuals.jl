@@ -74,8 +74,9 @@ function residuals(sp; kwargs...)  # p_space, N_steps=50, dims
     p_combos = _parameter_combinations(adapted_p_space)
 
     # set up arrays to store residual landscapes
-    residuals = zeros(size(p_combos))
-    _evaluate!(residuals, _quality_function(sp, sp.quality, _workspace(sp)), p_combos)
+    quality = () -> _quality_function(sp, sp.quality, _workspace(sp))
+    residuals = reshape(_tmap((q, ps) -> q(ps), quality, vec(p_combos), _threaded(sp)),
+        size(p_combos))
 
     return p_space[dims], reshape(residuals, [size(residuals)[i] for i in sort(dims)]...)
 end

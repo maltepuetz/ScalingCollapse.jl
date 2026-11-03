@@ -70,6 +70,34 @@ end
 # whose quality function is then called without one
 _workspace(sp) = nothing
 
+# whether to split the work on sp into tasks; never for an object that only mimics a
+# ScalingProblem (in the tests)
+_threaded(sp) = false
+
+# [f(state, x) for x in xs], where state = init(). If threaded, xs is split into at most
+# Threads.nthreads() contiguous chunks that are worked through in parallel tasks, each with its
+# own state (e.g. a Workspace), so f(state, x) must not share anything else between tasks. An
+# exception in a task is rethrown as it is.
+function _tmap(f, init, xs, threaded::Bool)
+    n_tasks = threaded ? min(Threads.nthreads(), length(xs)) : 1
+    n_tasks <= 1 && return _map_chunk(f, init(), xs)
+    chunks = Iterators.partition(xs, cld(length(xs), n_tasks))
+    tasks = [Threads.@spawn _map_chunk(f, init(), chunk) for chunk in chunks]
+    return reduce(vcat, map(_fetch, tasks))
+end
+
+# a function barrier for the type of state
+_map_chunk(f::F, state, xs) where {F} = [f(state, x) for x in xs]
+
+function _fetch(task)
+    try
+        return fetch(task)
+    catch e
+        e isa TaskFailedException && throw(e.task.exception)
+        rethrow()
+    end
+end
+
 # A quality function without a method for a workspace (e.g. a custom one) is called without it
 (qf::QualityFunction)(::Workspace, sp, ps; check_bounds=false) = qf(sp, ps; check_bounds)
 

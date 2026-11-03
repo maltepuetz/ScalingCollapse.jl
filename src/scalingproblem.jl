@@ -74,6 +74,11 @@ distinct, and all values must be finite. At least two system sizes are needed.
 - `optimizer_options::Optim.Options=Optim.Options()`: tolerances, iteration and time
     limits, tracing and callbacks of every fit, including the fits of the error analysis.
 - `verbose::Bool=false`: log the progress of the fit.
+- `threads::Bool=true`: if Julia runs with several threads (e.g. `julia --threads=auto`),
+    spread the scan, the fits from several starting points and the error analysis over
+    them. The results are the same as with `threads=false`. A custom quality or scaling
+    function is then called from several threads at once, so it must not modify shared
+    state.
 
 **Error analysis**
 - `error::Union{Bool,Symbol}=true`: the method of the error analysis.
@@ -186,6 +191,7 @@ mutable struct ScalingProblem
     optimizer_options::Optim.Options
     n_bootstrap::Int
     rng::AbstractRNG
+    threads::Bool
 
 
 
@@ -210,6 +216,7 @@ mutable struct ScalingProblem
         optimizer_options,
         n_bootstrap,
         rng,
+        threads,
     )
         return new(
             data,
@@ -232,6 +239,7 @@ mutable struct ScalingProblem
             optimizer_options,
             n_bootstrap,
             rng,
+            threads,
         )
     end
 
@@ -307,6 +315,10 @@ mutable struct ScalingProblem
         )
         n_bootstrap = _check_n_bootstrap(get(kwargs, :n_bootstrap, 100))
         rng = _check_rng(get(kwargs, :rng, Random.default_rng()))
+        threads = get(kwargs, :threads, true)
+        threads isa Bool || throw(ArgumentError(
+            "threads must be true or false, got $(repr(threads))."
+        ))
 
         length(p_space) == n_ps || throw(ArgumentError(
             "p_space has $(length(p_space)) entries, but the scaling function has " *
@@ -362,6 +374,7 @@ mutable struct ScalingProblem
             optimizer_options,
             n_bootstrap,
             rng,
+            threads,
         )
 
         # solve ScalingProblem
@@ -412,6 +425,7 @@ const SCALINGPROBLEM_KWARGS = (
     :optimizer_options,
     :n_bootstrap,
     :rng,
+    :threads,
 )
 
 function _check_data(data, quality, quality_scan, skip_scan)
@@ -449,6 +463,12 @@ function _check_data(data, quality, quality_scan, skip_scan)
 end
 
 _workspace(sp::ScalingProblem) = Workspace(sp)
+
+# whether to split the work into tasks (see _tmap)
+_threaded(sp::ScalingProblem) = sp.threads && Threads.nthreads() > 1
+
+# shallow copy of sp, e.g. to give it other data in a task
+_copy(sp::ScalingProblem) = ScalingProblem((getfield(sp, k) for k in fieldnames(ScalingProblem))...)
 
 # call the scaling function once to catch signature and return type mistakes early
 function _check_scaling_function(sf, d, ps)
@@ -622,6 +642,7 @@ function _error_problem(sp::ScalingProblem;
         sp.optimizer_options,
         _check_n_bootstrap(n_bootstrap),
         _check_rng(rng),
+        sp.threads,
     )
 end
 
