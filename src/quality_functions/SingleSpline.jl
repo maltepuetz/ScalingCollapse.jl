@@ -31,52 +31,27 @@ end
 function (sqf::SingleSpline)(sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    if check_bounds
-        for (i, p) in enumerate(parameters)
-            if p < sp.p_space[i][1] || p > sp.p_space[i][end]
-                return Inf
-            end
-        end
-    end
+    check_bounds && _out_of_bounds(sp, parameters) && return Inf
 
-    scaled_data = Data[sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
+    scaled_data = _scale_all(sp, parameters)
 
     # set interval in which we want to optimize
-    interval = Vector{Float64}(undef, 2)
-    interval[1] = max(
-        maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
-        sp.dx[1]
-    )
-    interval[2] = min(
-        minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
-        sp.dx[2]
-    )
+    interval = _overlap_interval(scaled_data, sp.dx)
 
     # check whether the constructed optimization interval is valid (also rejects NaN)
     interval[1] <= interval[2] || return Inf
 
     # collect all data points in the interval -- fitting the spline to points outside of it
     # would make its flexibility inside the interval depend on the scaling parameters
-    xs = Float64[]
-    ys = Float64[]
-    es = Float64[]
-    for d in scaled_data
-        for i in eachindex(d.xs)
-            interval[1] <= d.xs[i] <= interval[2] || continue
-            push!(xs, d.xs[i])
-            push!(ys, d.ys[i])
-            push!(es, d.es[i])
-        end
+    ranges = map(scaled_data) do d
+        searchsortedfirst(d.xs, interval[1]):searchsortedlast(d.xs, interval[2])
     end
 
     # the spline needs at least 2 knots and more data points than knots
-    length(xs) < 3 && return Inf
+    sum(length, ranges) < 3 && return Inf
 
     # sort data points
-    perm = sortperm(xs)
-    xs = xs[perm]
-    ys = ys[perm]
-    es = es[perm]
+    xs, ys, es = _merge_sorted(scaled_data, ranges)
 
 
     # set N_knots

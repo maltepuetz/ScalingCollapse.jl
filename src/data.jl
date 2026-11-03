@@ -38,6 +38,10 @@ struct Data
         end
         return new(L, xsd, ysd, esd)
     end
+    # takes the arrays without copying or sorting: xs must be sorted and es nonnegative
+    function Data(L, xs::Vector{Float64}, ys::Vector{Float64}, es::Vector{Float64}, ::Val{:sorted})
+        return new(L, xs, ys, es)
+    end
 end
 
 function Data(L, xs, ys)
