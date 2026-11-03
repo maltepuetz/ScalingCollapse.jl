@@ -89,12 +89,13 @@ end
 # a function barrier for the type of state
 _map_chunk(f::F, state, xs) where {F} = [f(state, x) for x in xs]
 
+# fetch(task), with an exception in the task rethrown as it is instead of wrapped in a
+# TaskFailedException (the only exception fetch throws for a failed task)
 function _fetch(task)
     try
         return fetch(task)
     catch e
-        e isa TaskFailedException && throw(e.task.exception)
-        rethrow()
+        e isa TaskFailedException ? throw(e.task.exception) : rethrow()
     end
 end
 
