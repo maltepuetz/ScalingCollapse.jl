@@ -18,9 +18,9 @@ function parameter_scan!(sp)
     sp.verbose && @info "Scanning parameter space..."
     p_combos = _parameter_combinations(sp.p_space)
     S_p_space = zeros(size(p_combos))
-    for (i, ps) in enumerate(p_combos)
-        S_p_space[i] = _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=false))
-    end
+    ws = _workspace(sp)
+    q_scan = _quality_function(sp, sp.quality_scan, ws; check_bounds=false)
+    _evaluate!(S_p_space, _nan_to_inf ∘ q_scan, p_combos)
     all(isinf, S_p_space) && error(
         "The quality function is infinite for every parameter combination in p_space. " *
         "This usually means that the rescaled data of the different system sizes do not " *
@@ -53,7 +53,7 @@ function parameter_scan!(sp)
     # optimize each starting point
     loc_minima = zeros(length(loc_starting_ps))
     loc_optimal_ps = Vector{Vector{Float64}}(undef, length(loc_starting_ps))
-    f = ps -> _nan_to_inf(sp.quality_scan(sp, ps; check_bounds=true))
+    f = _nan_to_inf ∘ _quality_function(sp, sp.quality_scan, ws; check_bounds=true)
     for (i, l_ps) in enumerate(loc_starting_ps)
         result = optimize(f, l_ps, _bounded_optimizer(sp, f), sp.optimizer_options)
         loc_minima[i] = result.minimum
@@ -74,7 +74,7 @@ function optimize_starting_ps!(sp, starts=[sp.starting_ps])
     sp.verbose && @info "Starting optimization of provided starting parameters..."
 
     # optimize starting parameters
-    f = ps -> _nan_to_inf(sp.quality(sp, ps; check_bounds=true))
+    f = _nan_to_inf ∘ _quality_function(sp, sp.quality, _workspace(sp); check_bounds=true)
     result = nothing
     for start in starts
         r = optimize(f, start, _bounded_optimizer(sp, f), sp.optimizer_options)
@@ -220,6 +220,14 @@ function _bounded_optimizer(sp, f)
         BoundedSimplexer(sp.optimizer.initial_simplex, lower, upper, f),
         sp.optimizer.parameters,
     )
+end
+
+# values[i] = f(p_combos[i]) for all parameter combinations (a function barrier for f)
+function _evaluate!(values, f::F, p_combos) where {F}
+    for (i, ps) in enumerate(p_combos)
+        values[i] = f(ps)
+    end
+    return values
 end
 
 # treat NaN values of the quality function as invalid parameters

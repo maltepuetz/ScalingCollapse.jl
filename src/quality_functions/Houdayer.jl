@@ -34,12 +34,16 @@ like `Linear` (see its docstring). `MultipleSplines` gives a smooth quality.
 struct Houdayer <: QualityFunction end
 
 ##### Houdayer Quality Function #####
-function (::Houdayer)(sp, parameters; check_bounds=false)
+function (qf::Houdayer)(sp, parameters; check_bounds=false)
+    return qf(Workspace(sp), sp, parameters; check_bounds)
+end
+
+function (qf::Houdayer)(ws::Workspace, sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    check_bounds && _out_of_bounds(sp, parameters) && return Inf
+    check_bounds && _out_of_bounds(ws, parameters) && return Inf
 
-    scaled_data = _scale_all(sp, parameters)
+    scaled_data = _scale_all!(ws, sp.data, parameters)
 
     # set interval in which we want to optimize
     interval = _overlap_interval(scaled_data, sp.dx)

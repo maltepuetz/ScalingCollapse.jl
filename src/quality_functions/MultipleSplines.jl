@@ -61,11 +61,15 @@ min_points(sqf::MultipleSplines) = sqf.interp === :cubic ? 4 : 2
 
 ##### MultipleSplines Quality Function #####
 function (sqf::MultipleSplines)(sp, parameters; check_bounds=false)
+    return sqf(Workspace(sp), sp, parameters; check_bounds)
+end
+
+function (sqf::MultipleSplines)(ws::Workspace, sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    check_bounds && _out_of_bounds(sp, parameters) && return Inf
+    check_bounds && _out_of_bounds(ws, parameters) && return Inf
 
-    scaled_data = _scale_all(sp, parameters)
+    scaled_data = _scale_all!(ws, sp.data, parameters)
 
     # set interval in which we want to optimize
     interval = _overlap_interval(scaled_data, sp.dx)
@@ -76,10 +80,12 @@ function (sqf::MultipleSplines)(sp, parameters; check_bounds=false)
 
     # calculate S
     S = 0.0
+    yvals, evals = _interpolation_buffers!(ws, length(scaled_data), sqf.N_steps)
     if sp.errors_defined && !sqf.scan_mode
-        S = _S_weighted(scaled_data, interval, sqf.N_steps, sqf.weight_density, sqf.interp)
+        S = _S_weighted!(yvals, evals, ws.slopes, ws.densities, scaled_data, interval,
+            sqf.N_steps, sqf.weight_density, sqf.interp)
     else
-        S = _S_unweighted(scaled_data, interval, sqf.N_steps, sqf.interp)
+        S = _S_unweighted!(yvals, ws.slopes, scaled_data, interval, sqf.N_steps, sqf.interp)
     end
 
     return S
@@ -178,13 +184,18 @@ end
 _slopes_buffer(scaled_data) = Vector{Float64}(undef, maximum(d -> length(d.xs), scaled_data))
 
 function _S_unweighted(scaled_data, interval, N_steps, interp)
+    yvals = Matrix{Float64}(undef, length(scaled_data), N_steps)
+    return _S_unweighted!(yvals, _slopes_buffer(scaled_data), scaled_data, interval, N_steps,
+        interp)
+end
+
+# _S_unweighted with the buffers yvals (sizes × N_steps) and slopes
+function _S_unweighted!(yvals, slopes, scaled_data, interval, N_steps, interp)
 
     xs_eval = range(interval[1], interval[2], length=N_steps)
-    yvals = Matrix{Float64}(undef, N_steps, length(scaled_data))
-    slopes = _slopes_buffer(scaled_data)
     for l in eachindex(scaled_data)
         d = scaled_data[l]
-        _interpolate!(view(yvals, :, l), slopes, interp, d.xs, d.ys, xs_eval)
+        _interpolate!(view(yvals, l, :), slopes, interp, d.xs, d.ys, xs_eval)
     end
 
     # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
@@ -199,8 +210,8 @@ function _S_unweighted(scaled_data, interval, N_steps, interp)
 
     # calculate quality of the scaling
     S = 0.0
-    for i in axes(yvals, 1)
-        S += var(view(yvals, i, :))
+    for i in axes(yvals, 2)
+        S += var(view(yvals, :, i))
     end
     S /= N_steps
 
@@ -208,8 +219,17 @@ function _S_unweighted(scaled_data, interval, N_steps, interp)
 end
 
 function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
+    n = length(scaled_data)
+    return _S_weighted!(Matrix{Float64}(undef, n, N_steps), Matrix{Float64}(undef, n, N_steps),
+        _slopes_buffer(scaled_data), Vector{Float64}(undef, n), scaled_data, interval, N_steps,
+        weight_density, interp)
+end
 
-    dp_densities = zeros(length(scaled_data))
+# _S_weighted with the buffers yvals and evals (sizes × N_steps), slopes and dp_densities (one
+# per size)
+function _S_weighted!(yvals, evals, slopes, dp_densities, scaled_data, interval, N_steps,
+    weight_density, interp)
+
     for l in eachindex(scaled_data)
         i_l = searchsortedlast(scaled_data[l].xs, interval[1])
         i_r = searchsortedfirst(scaled_data[l].xs, interval[2])
@@ -221,9 +241,6 @@ function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
 
     xs_eval = range(interval[1], interval[2], length=N_steps)
     n = length(scaled_data)
-    yvals = Matrix{Float64}(undef, n, N_steps)
-    evals = Matrix{Float64}(undef, n, N_steps)  # uncertainties of the spline values
-    slopes = _slopes_buffer(scaled_data)
     for l in eachindex(scaled_data)
         d = scaled_data[l]
         _interpolate!(view(yvals, l, :), slopes, interp, d.xs, d.ys, xs_eval)

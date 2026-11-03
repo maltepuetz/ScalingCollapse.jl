@@ -22,6 +22,10 @@ instead.
   with error bars takes about a third of the time. The results are unchanged, except that
   `MultipleSplines` with error bars interpolates the error bars exactly linearly instead
   of with a Dierckx spline, which changes its value in the last digits (#67).
+- Repeated quality evaluations in the parameter scan, the fits, the error analysis and
+  `residuals` reuse their buffers and rescale the data of the presets in place, so
+  `MultipleSplines` (pchip), `Linear` and `Houdayer` no longer allocate per evaluation,
+  with unchanged results. A fit with profile errors allocates about 70× less memory (#68).
 
 ## 0.3.0 - 2026-11-02
 

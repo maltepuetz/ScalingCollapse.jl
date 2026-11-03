@@ -75,9 +75,7 @@ function residuals(sp; kwargs...)  # p_space, N_steps=50, dims
 
     # set up arrays to store residual landscapes
     residuals = zeros(size(p_combos))
-    for (i, ps) in enumerate(p_combos)
-        residuals[i] = sp.quality(sp, ps)
-    end
+    _evaluate!(residuals, _quality_function(sp, sp.quality, _workspace(sp)), p_combos)
 
     return p_space[dims], reshape(residuals, [size(residuals)[i] for i in sort(dims)]...)
 end
