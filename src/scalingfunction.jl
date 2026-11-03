@@ -320,26 +320,23 @@ function _absolute_power_scaling(d::Data, p1, p2, p3)
     return _linear_scaling(d, _absolute_x_coefficients(d.L, p1, p2)..., d.L^(p3 / p2))
 end
 
-# x -> fma(x, a, b), y and e unchanged
+# x -> fma(x, a, b), y and e unchanged. For a < 0 the points are stored in reverse order,
+# so that x stays sorted.
 function _linear_scaling(d::Data, a, b)
-    xs = similar(d.xs)
-    map!(x -> fma(x, a, b), xs, d.xs)
-    return Data(d.L, xs, copy(d.ys), copy(d.es))
+    return _linear_scaling(d, a, b, nothing)
 end
 
-# x -> fma(x, a, b), y -> y * c, e -> e * c
+# x -> fma(x, a, b), y -> y * c, e -> e * c (c > 0)
 function _linear_scaling(d::Data, a, b, c)
+    n = length(d.xs)
     xs = similar(d.xs)
     ys = similar(d.ys)
     es = similar(d.es)
-
-    map!(x -> fma(x, a, b), xs, d.xs)
-
-    @assert length(ys) == length(es)
-    for i in eachindex(ys)
-        ys[i] = d.ys[i] * c
-        es[i] = d.es[i] * c
+    for i in eachindex(d.xs)
+        j = a < 0 ? n + 1 - i : i
+        xs[j] = fma(d.xs[i], a, b)
+        ys[j] = isnothing(c) ? d.ys[i] : d.ys[i] * c
+        es[j] = isnothing(c) ? d.es[i] : d.es[i] * c
     end
-
-    return Data(d.L, xs, ys, es)
+    return Data(d.L, xs, ys, es, Val(:sorted))
 end

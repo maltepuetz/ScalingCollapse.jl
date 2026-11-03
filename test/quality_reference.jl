@@ -82,6 +82,11 @@ function _S_weighted_reference(scaled_data, interval, N_steps, weight_density)
     return S
 end
 
+# The error bars were interpolated with a linear Dierckx spline, whose least-squares fit moves
+# some coefficients by one ulp away from the data. They are now interpolated exactly, which
+# changes the weighted quality in the last digits only.
+const _RTOL_ERRORS = 1e-12
+
 # random scaled data of n_sizes sizes on x in about [-3, 3] with overlap interval [-1.5, 1.5]
 function _random_scaled_data(rng, n_sizes; n_points=40, zero_errors=false)
     map(1:n_sizes) do l
@@ -111,9 +116,10 @@ end
                 _S_unweighted_reference(scaled_data, interval, N_steps),
             )
             for weight_density in (true, false)
-                @test isequal(
+                @test isapprox(
                     ScalingCollapse._S_weighted(scaled_data, interval, N_steps, weight_density, :cubic),
-                    _S_weighted_reference(scaled_data, interval, N_steps, weight_density),
+                    _S_weighted_reference(scaled_data, interval, N_steps, weight_density);
+                    rtol=_RTOL_ERRORS,
                 )
             end
         end
@@ -122,9 +128,10 @@ end
             _random_scaled_data(rng, 4; zero_errors=true),
             fill(first(_random_scaled_data(rng, 1)), 3),
         )
-            @test isequal(
+            @test isapprox(
                 ScalingCollapse._S_weighted(scaled_data, interval, 100, true, :cubic),
-                _S_weighted_reference(scaled_data, interval, 100, true),
+                _S_weighted_reference(scaled_data, interval, 100, true);
+                rtol=_RTOL_ERRORS,
             )
             @test isequal(
                 ScalingCollapse._S_unweighted(scaled_data, interval, 100, :cubic),
@@ -144,8 +151,8 @@ end
         for ps in ([0.5, 1.0, 0.1], [0.49, 1.1, 0.12], [0.51, 0.9, 0.05])
             scaled = [sp.sf.f(d, ps...) for d in sp.data]
             interval = [maximum(d.xs[1] for d in scaled), minimum(d.xs[end] for d in scaled)]
-            @test isequal(MultipleSplines(interp=:cubic)(sp, ps),
-                _S_weighted_reference(scaled, interval, 100, true))
+            @test isapprox(MultipleSplines(interp=:cubic)(sp, ps),
+                _S_weighted_reference(scaled, interval, 100, true); rtol=_RTOL_ERRORS)
             @test isequal(MultipleSplines(scan_mode=true, interp=:cubic)(sp, ps),
                 _S_unweighted_reference(scaled, interval, 100))
         end
@@ -169,6 +176,17 @@ end
         @test d.ys == [1.0, 2.0, 3.0, 4.0]
         d = ScalingCollapse.Data(4, [3.0, 2.0, 2.0, 1.0], [4.0, 2.0, 3.0, 1.0], zeros(4))
         @test d.xs == [1.0, 2.0, 2.0, 3.0] && d.ys == [1.0, 2.0, 3.0, 4.0]
+        # the presets rescale without sorting again; a negative x factor reverses the order
+        d = ScalingCollapse.Data(16, xs, ys, es)
+        for (p1, p2, p3) in ((0.5, 1.0, 0.1), (0.5, -1.0, 0.1), (-0.5, 1.0, -0.2))
+            for f in (ScalingCollapse._absolute_power_scaling, ScalingCollapse._power_scaling)
+                for scaled in (f(d, p1, p2), f(d, p1, p2, p3))
+                    @test issorted(scaled.xs)
+                    @test isequal(scaled,
+                        ScalingCollapse.Data(scaled.L, scaled.xs, scaled.ys, scaled.es))
+                end
+            end
+        end
     end
 
     @testset "Quality functions are type stable" begin
@@ -184,14 +202,14 @@ end
         end
         small, large = problem(50), problem(500)
         # (a fixed number of knots: the spline fit itself allocates more for more knots)
-        for q in (Linear(), SingleSpline(N_knots=10), MultipleSplines(),
+        for q in (Linear(), Houdayer(), SingleSpline(N_knots=10), MultipleSplines(),
             MultipleSplines(scan_mode=true), MultipleSplines(interp=:cubic))
             n_small = _allocations(q, small, [0.5, 1.0])
             n_large = _allocations(q, large, [0.5, 1.0])
             @test n_large < 2 * n_small
         end
         # with error bars, MultipleSplines propagated the uncertainties with Measurements.jl,
-        # which allocated about 13000 times here (now about 200)
+        # which allocated about 13000 times here (now about 30)
         @test _allocations(MultipleSplines(), small, [0.5, 1.0]) < 2000
     end
 end

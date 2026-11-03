@@ -37,26 +37,12 @@ struct Houdayer <: QualityFunction end
 function (::Houdayer)(sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    if check_bounds
-        for (i, p) in enumerate(parameters)
-            if p < sp.p_space[i][1] || p > sp.p_space[i][end]
-                return Inf
-            end
-        end
-    end
+    check_bounds && _out_of_bounds(sp, parameters) && return Inf
 
-    scaled_data = Data[sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
+    scaled_data = _scale_all(sp, parameters)
 
     # set interval in which we want to optimize
-    interval = Vector{Float64}(undef, 2)
-    interval[1] = max(
-        maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
-        sp.dx[1]
-    )
-    interval[2] = min(
-        minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
-        sp.dx[2]
-    )
+    interval = _overlap_interval(scaled_data, sp.dx)
 
     # check whether the constructed optimization interval is valid (also rejects NaN)
     interval[1] <= interval[2] || return Inf
@@ -85,48 +71,62 @@ function (::Houdayer)(sp, parameters; check_bounds=false)
     return S
 end
 
+# the index j' of the data point of d just left of x, if d brackets x with j' and j' + 1,
+# else 0
+function _bracket(d, x)
+    j_prime = searchsortedlast(d.xs, x)
+    return j_prime == length(d.xs) ? 0 : j_prime
+end
+
+# weighted linear least-squares fit through the two data points of every other size that
+# bracket scaled_data[i].xs[j]; the weights are 1/e² (all 1 if all errors are zero, and the
+# largest finite weight for single zero errors). Returns the fit value and its variance at x.
 function fit_mastercurve(scaled_data, i, j)
 
-    # set arrays to store set of data used for fitting
-    xs = Float64[]
-    ys = Float64[]
-    ws = Float64[]
+    x = scaled_data[i].xs[j]
 
+    # first pass: whether any point contributes, and the largest finite weight
+    any_point = false
+    all_zero = true
+    w_max = 0.0
     for (i_prime, d_prime) in enumerate(scaled_data)
         i_prime == i && continue
-        j_prime = searchsortedlast(d_prime.xs, scaled_data[i].xs[j])
-        ((j_prime == 0) || (j_prime == length(d_prime.xs))) && continue  # no contribution
-        push!(xs, d_prime.xs[j_prime])
-        push!(xs, d_prime.xs[j_prime+1])
-        push!(ys, d_prime.ys[j_prime])
-        push!(ys, d_prime.ys[j_prime+1])
-        push!(ws, d_prime.es[j_prime])
-        push!(ws, d_prime.es[j_prime+1])
+        j_prime = _bracket(d_prime, x)
+        j_prime == 0 && continue  # no contribution
+        any_point = true
+        for e in (d_prime.es[j_prime], d_prime.es[j_prime+1])
+            all_zero &= e == 0.0
+            w = 1 / e^2
+            isfinite(w) && (w_max = max(w_max, w))
+        end
     end
 
-    length(xs) == 0 && return Inf, Inf  # no contribution
+    any_point || return Inf, Inf  # no contribution
 
-    # check whether all elements in ws are zeros
-    all(ws .== 0.0) && (ws .= 1.0)
-    ws .= 1 ./ ws .^ 2
-
-    # if there are single zero errors, set weight to max(ws \ Inf)
-    for i in eachindex(ws)
-        isinf(ws[i]) && (ws[i] = maximum(ws[isfinite.(ws)]))
+    # second pass: the weighted sums
+    K = Kx = Ky = Kxx = Kxy = 0.0
+    for (i_prime, d_prime) in enumerate(scaled_data)
+        i_prime == i && continue
+        j_prime = _bracket(d_prime, x)
+        j_prime == 0 && continue
+        for k in (j_prime, j_prime + 1)
+            x_k, y_k = d_prime.xs[k], d_prime.ys[k]
+            w = all_zero ? 1.0 : 1 / d_prime.es[k]^2
+            isinf(w) && (w = w_max)
+            K += w
+            Kx += w * x_k
+            Ky += w * y_k
+            Kxx += w * x_k^2
+            Kxy += w * x_k * y_k
+        end
     end
-
-    K = sum(ws)
-    Kx = sum(ws .* xs)
-    Ky = sum(ws .* ys)
-    Kxx = sum(ws .* xs .^ 2)
-    Kxy = sum(ws .* xs .* ys)
     Delta = K * Kxx - Kx^2
 
     a = (Kxx * Ky - Kx * Kxy) / Delta
     b = (K * Kxy - Kx * Ky) / Delta
 
-    Y_ij = a + scaled_data[i].xs[j] * b
-    dY2_ij = 1 / Delta * (Kxx - 2 * scaled_data[i].xs[j] * Kx + scaled_data[i].xs[j]^2 * K)
+    Y_ij = a + x * b
+    dY2_ij = 1 / Delta * (Kxx - 2 * x * Kx + x^2 * K)
 
     return Y_ij, dY2_ij
 end

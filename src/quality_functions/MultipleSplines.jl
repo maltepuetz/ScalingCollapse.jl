@@ -63,26 +63,12 @@ min_points(sqf::MultipleSplines) = sqf.interp === :cubic ? 4 : 2
 function (sqf::MultipleSplines)(sp, parameters; check_bounds=false)
 
     # check if parameters are in bounds -- if not return Inf
-    if check_bounds
-        for (i, p) in enumerate(parameters)
-            if p < sp.p_space[i][1] || p > sp.p_space[i][end]
-                return Inf
-            end
-        end
-    end
+    check_bounds && _out_of_bounds(sp, parameters) && return Inf
 
-    scaled_data = Data[sp.sf.f(sp.data[i], parameters...) for i in eachindex(sp.data)]
+    scaled_data = _scale_all(sp, parameters)
 
     # set interval in which we want to optimize
-    interval = Vector{Float64}(undef, 2)
-    interval[1] = max(
-        maximum(scaled_data[i].xs[1] for i in eachindex(scaled_data)),
-        sp.dx[1]
-    )
-    interval[2] = min(
-        minimum(scaled_data[i].xs[end] for i in eachindex(scaled_data)),
-        sp.dx[2]
-    )
+    interval = _overlap_interval(scaled_data, sp.dx)
 
     # check whether the constructed optimization interval is valid (also rejects NaN)
     interval[1] <= interval[2] || return Inf
@@ -105,14 +91,30 @@ function _interpolate(interp::Symbol, xs, ys, xs_eval)
     return _pchip(xs, ys, xs_eval)
 end
 
+# write the interpolated y values of one system size at the sorted points xs_eval into vals;
+# slopes is a buffer of at least length(xs) for pchip
+function _interpolate!(vals, slopes, interp::Symbol, xs, ys, xs_eval)
+    if interp === :cubic
+        copyto!(vals, evaluate(Spline1D(xs, ys, k=3), collect(xs_eval)))
+    else
+        _pchip!(vals, slopes, xs, ys, xs_eval)
+    end
+    return vals
+end
+
 # Monotone piecewise-cubic Hermite interpolation (Fritsch & Carlson 1980), with the slopes of
 # Fritsch & Butland (1984) as in Moler's pchip: at an interior point the slope is a weighted
 # harmonic mean of the two adjacent secant slopes, or zero if they differ in sign (the point
 # is a local extremum of the data). The end slopes are one-sided three-point estimates,
 # limited to keep the shape. Outside [xs[1], xs[end]] the end cubics are extrapolated.
 function _pchip(xs, ys, xs_eval)
+    vals = Vector{Float64}(undef, length(xs_eval))
+    return _pchip!(vals, Vector{Float64}(undef, length(xs)), xs, ys, xs_eval)
+end
+
+# _pchip writing into vals, with the slopes d in a buffer of at least length(xs)
+function _pchip!(vals, d, xs, ys, xs_eval)
     n = length(xs)
-    d = Vector{Float64}(undef, n)
     if n == 2
         d[1] = d[2] = (ys[2] - ys[1]) / (xs[2] - xs[1])
     else
@@ -135,9 +137,8 @@ function _pchip(xs, ys, xs_eval)
         d[n] = _pchip_end_slope(h1, h2, (ys[n] - ys[n-1]) / h1, (ys[n-1] - ys[n-2]) / h2)
     end
 
-    vals = similar(xs_eval, Float64)
     i = 1
-    for (k, x) in enumerate(xs_eval)
+    for (k, x) in zip(eachindex(vals), xs_eval)
         # the interval [xs[i], xs[i+1]] that contains x (xs_eval is sorted)
         while i < n - 1 && x >= xs[i+1]
             i += 1
@@ -157,13 +158,33 @@ function _pchip_end_slope(h1, h2, δ1, δ2)
     return s
 end
 
+# write the linear interpolation of (xs, ys) at the sorted points xs_eval, which lie in
+# [xs[1], xs[end]], into vals. The arithmetic is that of Dierckx's evaluation of a linear
+# B-spline (fpbspl), which this replaces, so the values agree bit for bit.
+function _linear_interpolation!(vals, xs, ys, xs_eval)
+    n = length(xs)
+    i = 1
+    for (k, x) in zip(eachindex(vals), xs_eval)
+        while i < n - 1 && x >= xs[i+1]
+            i += 1
+        end
+        f = 1 / (xs[i+1] - xs[i])
+        vals[k] = ys[i] * (f * (xs[i+1] - x)) + ys[i+1] * (f * (x - xs[i]))
+    end
+    return vals
+end
+
+# a buffer for the pchip slopes of every size of scaled_data
+_slopes_buffer(scaled_data) = Vector{Float64}(undef, maximum(d -> length(d.xs), scaled_data))
+
 function _S_unweighted(scaled_data, interval, N_steps, interp)
 
-    xvals = range(interval[1], interval[2], length=N_steps)
-    xs_eval = collect(xvals)
-    yvals = zeros(N_steps, length(scaled_data))
+    xs_eval = range(interval[1], interval[2], length=N_steps)
+    yvals = Matrix{Float64}(undef, N_steps, length(scaled_data))
+    slopes = _slopes_buffer(scaled_data)
     for l in eachindex(scaled_data)
-        yvals[:, l] = _interpolate(interp, scaled_data[l].xs, scaled_data[l].ys, xs_eval)
+        d = scaled_data[l]
+        _interpolate!(view(yvals, :, l), slopes, interp, d.xs, d.ys, xs_eval)
     end
 
     # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
@@ -178,10 +199,8 @@ function _S_unweighted(scaled_data, interval, N_steps, interp)
 
     # calculate quality of the scaling
     S = 0.0
-    row = zeros(size(yvals, 2))
     for i in axes(yvals, 1)
-        copyto!(row, view(yvals, i, :))
-        S += var(row)
+        S += var(view(yvals, i, :))
     end
     S /= N_steps
 
@@ -189,11 +208,6 @@ function _S_unweighted(scaled_data, interval, N_steps, interp)
 end
 
 function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
-
-    # linear interpolation of the error bars of each system size
-    e_splines = [
-        Spline1D(scaled_data[i].xs, scaled_data[i].es, k=1) for i in eachindex(scaled_data)
-    ]
 
     dp_densities = zeros(length(scaled_data))
     for l in eachindex(scaled_data)
@@ -205,16 +219,19 @@ function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
     end
     !weight_density && (dp_densities .= 1.0)
 
-    xvals = range(interval[1], interval[2], length=N_steps)
-    xs_eval = collect(xvals)
+    xs_eval = range(interval[1], interval[2], length=N_steps)
     n = length(scaled_data)
     yvals = Matrix{Float64}(undef, n, N_steps)
     evals = Matrix{Float64}(undef, n, N_steps)  # uncertainties of the spline values
+    slopes = _slopes_buffer(scaled_data)
     for l in eachindex(scaled_data)
-        yvals[l, :] = _interpolate(interp, scaled_data[l].xs, scaled_data[l].ys, xs_eval)
-        # add small number to avoid division by zero
-        evals[l, :] = evaluate(e_splines[l], xs_eval) .+ 1e-6
+        d = scaled_data[l]
+        _interpolate!(view(yvals, l, :), slopes, interp, d.xs, d.ys, xs_eval)
+        # linear interpolation of the error bars
+        _linear_interpolation!(view(evals, l, :), d.xs, d.es, xs_eval)
     end
+    # add small number to avoid division by zero
+    evals .+= 1e-6
 
     # normalize y, s.t. minimum(y) == 0, maximum(y) == 1
     offset = minimum(yvals)
@@ -222,14 +239,6 @@ function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
     norm_factor = maximum(yvals)
     yvals ./= norm_factor
     inv_norm = 1 / norm_factor
-
-    # The uncertainties were propagated with Measurements.jl before. The uncertainty of the
-    # mean sums the squared uncertainties in Measurements.jl's order, so that the quality
-    # does not change in the last digits.
-    ord = [1]
-    for k in 2:n
-        ord = [reverse(ord); k]
-    end
 
     # calculate quality of the scaling
     S = 0.0
@@ -239,8 +248,15 @@ function _S_weighted(scaled_data, interval, N_steps, weight_density, interp)
             y_sum += yvals[l, i]
         end
         y_mean = y_sum / n
+        # The uncertainties were propagated with Measurements.jl before. The uncertainty of
+        # the mean sums the squared uncertainties in Measurements.jl's order (n-1, n-3, ...
+        # down to 1 or 2, then up to n in the other parity), so that the quality does not
+        # change in the last digits.
         e2_sum = 0.0
-        for l in ord
+        for l in n-1:-2:1
+            e2_sum += abs2(evals[l, i] * inv_norm)
+        end
+        for l in (iseven(n) ? 2 : 1):2:n
             e2_sum += abs2(evals[l, i] * inv_norm)
         end
         e_mean = abs(1 / n * sqrt(e2_sum))
