@@ -1,0 +1,10 @@
+# Each test job in .github/workflows/CI.yml uploads its own coverage report:
+# 3 Julia versions x 4 platforms = 12. Codecov reports only after all of them have
+# arrived, so a partial report (only the jobs that finished first) does not show up as
+# a coverage drop. Update the number when the CI matrix changes. If a job fails before
+# it uploads, the Codecov status stays pending; it is not a required check.
+codecov:
+  notify:
+    after_n_builds: 12
+comment:
+  after_n_builds: 12

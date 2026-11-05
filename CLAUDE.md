@@ -30,7 +30,7 @@ The theme files (`index.ts`, `style.css`, `docstrings.css`, `overrides.css` in `
 
 Running a single test file: test files are `include`d from `test/runtests.jl`, which does `using ScalingCollapse, Test, Aqua, HDF5`. Test-only deps live in `test/Project.toml`. Data-driven tests open `testdata/IsingMonteCarlo.h5` via a path relative to `test/`, so the working directory must be `test/`. The easiest approach is a REPL using TestEnv.jl (`using TestEnv; TestEnv.activate()`), then `cd("test")`, `using ScalingCollapse, Test, HDF5`, `include("ising.jl")`. Alternatively, temporarily comment out includes in `runtests.jl`.
 
-CI (`.github/workflows/CI.yml`) runs on Julia `lts`, `1` and `nightly`, across Linux/macOS/Windows, including 32-bit Windows (x86). Watch for `Int`/`Int64` assumptions, since a 32-bit vs 64-bit bug was fixed before.
+CI (`.github/workflows/CI.yml`) runs on Julia `lts`, `1` and `nightly`, across Linux/macOS/Windows, including 32-bit Windows (x86). Watch for `Int`/`Int64` assumptions, since a 32-bit vs 64-bit bug was fixed before. Each of the 12 test jobs uploads coverage, and `codecov.yml` makes Codecov report only after all 12 uploads (`after_n_builds`), so update that number when the matrix changes.
 
 ## Changelog and releases
 
