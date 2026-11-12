@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/src/assets/logo-dark.svg">
+    <img src="docs/src/assets/logo-light.svg" alt="ScalingCollapse.jl logo" width="160">
+  </picture>
+</p>
+
 # ScalingCollapse.jl
 
 [![Stable](https://img.shields.io/badge/docs-stable-blue.svg)](https://maltepuetz.github.io/ScalingCollapse.jl/stable/)
