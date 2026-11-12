@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Overview
 
-ScalingCollapse.jl is a Julia package (Julia ≥ 1.9) for automatic finite-size scaling: given observables measured at several system sizes `L`, it finds the scaling parameters (e.g. `T_c`, `nu`, `beta`) that best collapse all curves onto one master curve.
+ScalingCollapse.jl is a Julia package (Julia ≥ 1.10) for automatic finite-size scaling: given observables measured at several system sizes `L`, it finds the scaling parameters (e.g. `T_c`, `nu`, `beta`) that best collapse all curves onto one master curve.
 
 ## Commands
 

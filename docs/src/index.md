@@ -96,7 +96,7 @@ fig
 
 ## Installation
 
-ScalingCollapse.jl is a registered Julia package (Julia 1.9 or later):
+ScalingCollapse.jl is a registered Julia package (Julia 1.10 or later):
 
 ```julia
 using Pkg
