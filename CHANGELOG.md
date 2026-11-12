@@ -6,6 +6,7 @@ Every pull request with a user-facing change adds an entry under `## Unreleased`
 A pull request that genuinely needs no entry — a typo fix, a CI-only change, a
 dependency bump of a test or docs environment — carries the `skip-changelog` label
 instead.
+- The README shows the package logo at the top, in a light and a dark variant (#74).
 
 ## Unreleased
 
