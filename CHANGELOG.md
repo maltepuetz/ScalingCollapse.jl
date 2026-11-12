@@ -12,7 +12,7 @@ instead.
 ### Changed
 
 - ScalingCollapse.jl now requires Julia 1.10 (the current LTS) or later. Julia 1.9 was
-  never tested in CI and is no longer supported upstream (#TBD).
+  never tested in CI and is no longer supported upstream (#75).
 
 ### Documentation
 
