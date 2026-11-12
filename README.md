@@ -30,7 +30,7 @@ using Pkg
 Pkg.add("ScalingCollapse")
 ```
 
-ScalingCollapse.jl requires Julia 1.9 or later.
+ScalingCollapse.jl requires Julia 1.10 or later.
 
 ## Quick start
 

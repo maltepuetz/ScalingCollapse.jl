@@ -9,6 +9,11 @@ instead.
 
 ## Unreleased
 
+### Changed
+
+- ScalingCollapse.jl now requires Julia 1.10 (the current LTS) or later. Julia 1.9 was
+  never tested in CI and is no longer supported upstream (#75).
+
 ### Documentation
 
 - `CITATION.cff` holds the citation metadata (title, abstract, author with ORCID and
