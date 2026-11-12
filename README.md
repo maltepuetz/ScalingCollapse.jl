@@ -5,7 +5,7 @@
 [![Build Status](https://github.com/maltepuetz/ScalingCollapse.jl/actions/workflows/CI.yml/badge.svg?branch=main)](https://github.com/maltepuetz/ScalingCollapse.jl/actions/workflows/CI.yml?query=branch%3Amain)
 [![Coverage](https://codecov.io/gh/maltepuetz/ScalingCollapse.jl/branch/main/graph/badge.svg?token=G2BD929KV0)](https://codecov.io/gh/maltepuetz/ScalingCollapse.jl)
 [![Aqua](https://raw.githubusercontent.com/JuliaTesting/Aqua.jl/master/badge.svg)](https://github.com/JuliaTesting/Aqua.jl)
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10712427.svg)](https://doi.org/10.5281/zenodo.10712427)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.10712426.svg)](https://doi.org/10.5281/zenodo.10712426)
 
 **Automatic finite-size scaling in Julia.** Given an observable measured for several system
 sizes `L`, ScalingCollapse.jl finds the critical point and the critical exponents for which
@@ -84,5 +84,8 @@ reports, questions and suggestions are welcome as
 
 ## Citing
 
-If you use ScalingCollapse.jl in your research, please cite it via its Zenodo record,
-[doi:10.5281/zenodo.10712427](https://doi.org/10.5281/zenodo.10712427).
+If you use ScalingCollapse.jl in your research, please cite it with the metadata in
+[`CITATION.cff`](CITATION.cff) (GitHub's "Cite this repository" button exports
+it as BibTeX or APA) and state the version you used. Every release is archived on Zenodo:
+[10.5281/zenodo.10712426](https://doi.org/10.5281/zenodo.10712426) always resolves to the
+latest version, and each version's record carries its own DOI for citing the exact release.

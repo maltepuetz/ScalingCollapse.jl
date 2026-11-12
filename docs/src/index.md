@@ -122,5 +122,9 @@ Pkg.add("ScalingCollapse")
 
 ## Citing
 
-If you use ScalingCollapse.jl in your research, please cite it via its Zenodo record,
-[doi:10.5281/zenodo.10712427](https://doi.org/10.5281/zenodo.10712427).
+If you use ScalingCollapse.jl in your research, please cite it with the metadata in
+[`CITATION.cff`](https://github.com/maltepuetz/ScalingCollapse.jl/blob/main/CITATION.cff)
+(GitHub's "Cite this repository" button exports it as BibTeX or APA) and state the
+version you used. Every release is archived on Zenodo:
+[10.5281/zenodo.10712426](https://doi.org/10.5281/zenodo.10712426) always resolves to the
+latest version, and each version's record carries its own DOI for citing the exact release.

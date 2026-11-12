@@ -9,6 +9,15 @@ instead.
 
 ## Unreleased
 
+### Documentation
+
+- `CITATION.cff` holds the citation metadata (title, abstract, author with ORCID and
+  affiliation, license, keywords and the Zenodo concept DOI). GitHub turns it into a
+  "Cite this repository" entry, and Zenodo reads it when archiving a release. The README
+  badge and the citing sections of the README and the docs now give the concept DOI
+  `10.5281/zenodo.10712426`, which resolves to the latest release, instead of the DOI of
+  version 0.1.0 (#73).
+
 ## 0.3.1 - 2026-11-05
 
 ### Added
