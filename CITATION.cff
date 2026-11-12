@@ -1,0 +1,30 @@
+cff-version: 1.2.0
+message: >-
+  If you use ScalingCollapse.jl in your research, please cite it using the
+  metadata from this file, and state the version you used.
+type: software
+title: ScalingCollapse.jl
+abstract: >-
+  ScalingCollapse.jl is a Julia package for automatic finite-size scaling.
+  Given an observable measured for several system sizes, it finds the
+  critical point and the critical exponents for which the curves of all sizes
+  collapse onto a single master curve, and estimates their errors. It offers
+  preset and custom scaling forms, several quality measures of the collapse
+  (spline, linear and Houdayer), a parameter scan followed by Nelder-Mead
+  fits, and profile, conditional and bootstrap error analyses.
+authors:
+  - family-names: Pütz
+    given-names: Malte
+    affiliation: University of Cologne
+    orcid: "https://orcid.org/0009-0009-0327-5644"
+repository-code: "https://github.com/maltepuetz/ScalingCollapse.jl"
+url: "https://maltepuetz.github.io/ScalingCollapse.jl/"
+license: MIT
+doi: 10.5281/zenodo.10712426
+keywords:
+  - Julia
+  - finite-size scaling
+  - data collapse
+  - critical exponents
+  - phase transitions
+  - statistical physics
